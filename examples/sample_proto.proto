@@ -1,0 +1,179 @@
+// Sample Protocol Buffer definition
+// This is an example proto file to demonstrate Lmdbug usage
+
+syntax = "proto3";
+
+package lmdbug.sample;
+
+// A sample user message
+message User {
+  // User ID
+  int64 id = 1;
+  
+  // Username
+  string username = 2;
+  
+  // Email address
+  string email = 3;
+  
+  // User profile
+  Profile profile = 4;
+  
+  // List of user tags
+  repeated string tags = 5;
+  
+  // User metadata
+  map<string, string> metadata = 6;
+  
+  // User creation timestamp
+  int64 created_at = 7;
+  
+  // Whether user is active
+  bool is_active = 8;
+}
+
+// User profile information
+message Profile {
+  // Display name
+  string display_name = 1;
+  
+  // User bio
+  string bio = 2;
+  
+  // Avatar URL
+  string avatar_url = 3;
+  
+  // User location
+  Location location = 4;
+  
+  // Profile settings
+  ProfileSettings settings = 5;
+}
+
+// Location information
+message Location {
+  // Country code
+  string country = 1;
+  
+  // City name
+  string city = 2;
+  
+  // Timezone
+  string timezone = 3;
+  
+  // Coordinates (optional)
+  Coordinates coordinates = 4;
+}
+
+// Geographic coordinates
+message Coordinates {
+  // Latitude
+  double latitude = 1;
+  
+  // Longitude
+  double longitude = 2;
+}
+
+// Profile settings
+message ProfileSettings {
+  // Whether profile is public
+  bool is_public = 1;
+  
+  // Email notifications enabled
+  bool email_notifications = 2;
+  
+  // Push notifications enabled
+  bool push_notifications = 3;
+  
+  // Theme preference
+  enum Theme {
+    LIGHT = 0;
+    DARK = 1;
+    AUTO = 2;
+  }
+  Theme theme = 4;
+  
+  // Language preference
+  string language = 5;
+}
+
+// Product message for e-commerce example
+message Product {
+  // Product ID
+  string id = 1;
+  
+  // Product name
+  string name = 2;
+  
+  // Product description
+  string description = 3;
+  
+  // Price in cents
+  int64 price_cents = 4;
+  
+  // Currency code
+  string currency = 5;
+  
+  // Product category
+  Category category = 6;
+  
+  // Product attributes
+  repeated Attribute attributes = 7;
+  
+  // Product images
+  repeated string image_urls = 8;
+  
+  // Inventory information
+  Inventory inventory = 9;
+  
+  // Product creation timestamp
+  int64 created_at = 10;
+  
+  // Product last update timestamp
+  int64 updated_at = 11;
+}
+
+// Product category
+message Category {
+  // Category ID
+  string id = 1;
+  
+  // Category name
+  string name = 2;
+  
+  // Parent category (for nested categories)
+  string parent_id = 3;
+}
+
+// Product attribute
+message Attribute {
+  // Attribute name
+  string name = 1;
+  
+  // Attribute value
+  string value = 2;
+  
+  // Attribute type
+  enum Type {
+    STRING = 0;
+    NUMBER = 1;
+    BOOLEAN = 2;
+    DATE = 3;
+  }
+  Type type = 3;
+}
+
+// Inventory information
+message Inventory {
+  // Quantity in stock
+  int32 quantity = 1;
+  
+  // Reserved quantity
+  int32 reserved = 2;
+  
+  // Whether item is in stock
+  bool in_stock = 3;
+  
+  // Reorder level
+  int32 reorder_level = 4;
+}
