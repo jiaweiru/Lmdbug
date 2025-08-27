@@ -1,0 +1,16 @@
+[project]
+name = "lmdbug"
+version = "0.1.0"
+description = "LMDB Data Preview Tool with Protobuf Support"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "gradio>=5.44.0",
+    "lmdb>=1.7.3",
+    "loguru>=0.7.3",
+    "protobuf>=6.32.0",
+    "typer>=0.16.1",
+]
+
+[project.scripts]
+lmdbug = "lmdbug.main:cli"

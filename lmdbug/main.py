@@ -5,11 +5,11 @@ Lmdbug - LMDB Data Preview Tool
 Main entry point for the application.
 """
 
-import sys
 from pathlib import Path
 from enum import Enum
 import typer
 from .ui.gradio_interface import LmdbugInterface
+from . import configure_logger
 from loguru import logger
 
 
@@ -19,17 +19,6 @@ class LogLevel(str, Enum):
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
-
-
-def setup_logging(level: LogLevel = LogLevel.INFO):
-    """
-    Setup logging configuration.
-    
-    Args:
-        level: Logging level
-    """
-    logger.remove()  # Remove default handler
-    logger.add(sys.stdout, level=level.value, format="{time} - {name} - {level} - {message}")
 
 
 def main(
@@ -63,7 +52,7 @@ def main(
         raise typer.Exit()
     
     # Setup logging
-    setup_logging(log_level)
+    configure_logger(log_level.value)
     
     try:
         # Validate database path if provided
