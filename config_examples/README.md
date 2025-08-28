@@ -25,12 +25,13 @@ Example field configuration file showing how to configure different message type
 
 2. **Customize your processors** in `my_processors.py`:
    ```python
-   from config_examples.custom_processors import processor
+   from lmdbug.core.processor_registry import BaseFieldProcessor, register_processor
    
-   @processor("my_custom_processor")
-   def my_processor(field_name: str, value: any, config: dict) -> dict:
-       # Your custom processing logic here
-       return {"type": "audio", "temp_path": "/path/to/temp/file"}
+   @register_processor("my_custom_processor")
+   class MyCustomProcessor(BaseFieldProcessor):
+       def process(self, field_name: str, value: any, config: dict) -> dict:
+           # Your custom processing logic here
+           return {"type": "audio", "temp_path": "/path/to/temp/file"}
    ```
 
 3. **Update your configuration** in `my_config.json`:
@@ -54,28 +55,32 @@ Example field configuration file showing how to configure different message type
 
 ## Creating Custom Processors
 
-Custom processors should follow this signature:
+Custom processors use the class-based design and should inherit from BaseFieldProcessor:
 ```python
-def processor_function(field_name: str, value: any, config: dict) -> dict:
-    """
-    Process a protobuf field value.
-    
-    Args:
-        field_name: Name of the protobuf field
-        value: Field value (can be str, bytes, int, etc.)
-        config: Configuration parameters from JSON config
+from lmdbug.core.processor_registry import BaseFieldProcessor, register_processor
+
+@register_processor("processor_name")
+class MyProcessor(BaseFieldProcessor):
+    def process(self, field_name: str, value: any, config: dict) -> dict:
+        """
+        Process a protobuf field value.
         
-    Returns:
-        Dict with processing results. Must include:
-        - "type": Preview type ("text", "audio", "image", "custom")
-        - "field_name": Original field name
-        - Other keys depend on the type (e.g., "temp_path" for audio/image)
-    """
-    return {
-        "type": "text",  # or "audio", "image", "custom"
-        "field_name": field_name,
-        # ... other result data
-    }
+        Args:
+            field_name: Name of the protobuf field
+            value: Field value (can be str, bytes, int, etc.)
+            config: Configuration parameters from JSON config
+            
+        Returns:
+            Dict with processing results. Must include:
+            - "type": Preview type ("text", "audio", "image", "custom")
+            - "field_name": Original field name
+            - Other keys depend on the type (e.g., "temp_path" for audio/image)
+        """
+        return {
+            "type": "text",  # or "audio", "image", "custom"
+            "field_name": field_name,
+            # ... other result data
+        }
 ```
 
 ## Return Types

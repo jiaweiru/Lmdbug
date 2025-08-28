@@ -3,6 +3,7 @@ from pathlib import Path
 
 from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict
+
 from .logging import get_logger
 from .exceptions import ProtobufError
 
@@ -19,17 +20,14 @@ class ProtobufHandler:
         """Initialize the Protobuf handler."""
         self.loaded_messages: dict[str, type[Message]] = {}
         self.module_class_registry: dict[str, str] = {}  # message_class -> module_path
-        self.custom_processors: dict[
-            str, callable
-        ] = {}  # processor_name -> processor_function
 
     def load_compiled_proto_module(self, module_path: str, message_class_name: str):
         """Loads a compiled protobuf Python module.
-        
+
         Args:
             module_path: Path to the compiled .py module.
             message_class_name: Name of the protobuf message class.
-            
+
         Raises:
             ProtobufError: If module loading fails.
         """
@@ -79,20 +77,18 @@ class ProtobufHandler:
             proto_module, message_class_name
         )
         self.module_class_registry[message_class_name] = normalized_path
-        logger.info(
-            f"Successfully loaded message class '{message_class_name}' from '{normalized_path}'"
-        )
+        logger.debug(f"Loaded message class '{message_class_name}' from '{normalized_path}'")
 
     def deserialize(self, data: bytes, message_type: str) -> Message:
         """Deserializes binary data to a protobuf message.
-        
+
         Args:
             data: Binary protobuf data.
             message_type: Name of the message type to deserialize as.
-            
+
         Returns:
             Deserialized protobuf message.
-            
+
         Raises:
             ProtobufError: If deserialization fails.
         """
@@ -117,13 +113,13 @@ class ProtobufHandler:
 
     def message_to_dict(self, message: Message) -> dict:
         """Converts a protobuf message to a dictionary.
-        
+
         Args:
             message: Protobuf message to convert.
-            
+
         Returns:
             Dictionary representation of the message.
-            
+
         Raises:
             ProtobufError: If conversion fails.
         """
@@ -136,45 +132,17 @@ class ProtobufHandler:
 
     def get_loaded_message_types(self) -> list[str]:
         """Gets list of loaded message type names.
-        
+
         Returns:
             List of loaded message type names.
         """
         return list(self.loaded_messages.keys())
 
-    def register_custom_processor(self, processor_name: str, processor_func: callable):
-        """Registers a custom field processor function.
-
-        Args:
-            processor_name: Name of the processor.
-            processor_func: Function with signature (field_name: str, value: any, config: dict) -> dict.
-        """
-        self.custom_processors[processor_name] = processor_func
-        logger.info(f"Registered custom processor: {processor_name}")
-
-    def custom_processor(self, processor_name: str):
-        """Decorator to register a custom field processor.
-
-        Args:
-            processor_name: Name of the processor.
-
-        Usage:
-            @protobuf_handler.custom_processor("pcm_audio")
-            def process_pcm_audio(field_name: str, value: bytes, config: dict) -> dict:
-                # Custom processing logic
-                return {"type": "audio", "temp_path": wav_file}
-        """
-
-        def decorator(func):
-            self.register_custom_processor(processor_name, func)
-            return func
-
-        return decorator
 
     def process_media_fields(
         self, data_dict: dict, field_config: dict[str, dict]
     ) -> dict:
-        """Processes media fields using custom processors.
+        """Processes media fields using global processor registry.
 
         Args:
             data_dict: Protobuf message converted to dict.
@@ -184,6 +152,8 @@ class ProtobufHandler:
         Returns:
             Dictionary with media previews for configured fields.
         """
+        from .processor_registry import processor_registry
+        
         media_previews = {"text": [], "audio": [], "image": [], "custom": []}
 
         for field_name, field_config in field_config.items():
@@ -194,31 +164,25 @@ class ProtobufHandler:
             processor_name = field_config.get("processor")
             processor_config = field_config.get("config", {})
 
-            if processor_name in self.custom_processors:
-                try:
-                    result = self.custom_processors[processor_name](
-                        field_name, field_value, processor_config
-                    )
-                    if result:
-                        result_type = result.get("type", "custom")
-                        if result_type in media_previews:
-                            media_previews[result_type].append(result)
-                        else:
-                            media_previews["custom"].append(result)
-                except Exception as e:
-                    logger.error(
-                        f"Error processing field {field_name} with processor {processor_name}: {e}"
-                    )
-            else:
-                logger.warning(
-                    f"Unknown processor: {processor_name} for field {field_name}"
-                )
+            try:
+                processor_instance = processor_registry.create_processor(processor_name, processor_config)
+                result = processor_instance.process(field_name, field_value, processor_config)
+                if result:
+                    result_type = result.get("type", "custom")
+                    if result_type in media_previews:
+                        media_previews[result_type].append(result)
+                    else:
+                        media_previews["custom"].append(result)
+            except ValueError:
+                logger.warning(f"Unknown processor: {processor_name} for field {field_name}")
+            except Exception as e:
+                logger.error(f"Error processing field {field_name} with processor {processor_name}: {e}")
 
         return media_previews
 
     def cleanup_temp_files(self, temp_paths: list[str]):
         """Cleans up temporary preview files.
-        
+
         Args:
             temp_paths: List of file paths to remove.
         """

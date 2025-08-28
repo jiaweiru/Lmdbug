@@ -1,6 +1,7 @@
 import lmdb
 from pathlib import Path
 from itertools import islice
+
 from .logging import get_logger
 from .exceptions import DatabaseError
 
@@ -142,17 +143,6 @@ class LMDBReader:
 
             all_entries = islice(cursor, start_index + count)
             return list(islice(all_entries, start_index, None))
-
-    def iter_all_entries(self):
-        """Iterator over all entries in the database."""
-        self._ensure_open()
-
-        with self.env.begin() as txn:
-            cursor = txn.cursor()
-            cursor.first()
-
-            for key, value in cursor:
-                yield key, value
 
     def search_keys_by_pattern(self, pattern: str, limit: int = 100) -> list[bytes]:
         """Search for keys containing a substring pattern."""
