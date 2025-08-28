@@ -1,0 +1,45 @@
+{
+  "AudioMessage": {
+    "audio_data": {
+      "processor": "pcm_audio_16khz",
+      "config": {
+        "sample_rate": 16000,
+        "channels": 1,
+        "sample_width": 2
+      }
+    },
+    "transcript": {
+      "processor": "simple_text"
+    },
+    "metadata": {
+      "processor": "simple_text"
+    }
+  },
+  "ImageMessage": {
+    "image_data": {
+      "processor": "raw_image_rgb",
+      "config": {
+        "width": 224,
+        "height": 224,
+        "channels": 3
+      }
+    },
+    "caption": {
+      "processor": "simple_text"
+    },
+    "encoded_features": {
+      "processor": "hex_display",
+      "config": {
+        "max_length": 100
+      }
+    }
+  },
+  "TextMessage": {
+    "content": {
+      "processor": "simple_text"
+    },
+    "encoded_content": {
+      "processor": "base64_text"
+    }
+  }
+}

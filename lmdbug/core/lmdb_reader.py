@@ -14,7 +14,7 @@ class LMDBReader:
 
     def __init__(self, db_path: str, map_size: int = 10 * 1024 * 1024 * 1024):
         """Initialize LMDB reader.
-        
+
         Args:
             db_path: Path to the LMDB database
             map_size: Maximum size of the database in bytes (default: 10GB)
@@ -39,12 +39,10 @@ class LMDBReader:
         """Open the LMDB environment."""
         try:
             self.env = lmdb.open(
-                str(self.db_path), 
-                readonly=True, 
-                lock=False,
-                map_size=self.map_size
+                str(self.db_path), readonly=True, lock=False, map_size=self.map_size
             )
-            logger.info(f"Successfully opened LMDB database: {self.db_path} with map_size: {self.map_size}")
+            logger.info(f"Successfully opened LMDB database: {self.db_path}")
+            logger.debug(f"LMDB database map_size: {self.map_size}")
         except Exception as e:
             error_msg = f"Failed to open LMDB database at {self.db_path}: {e}"
             logger.error(error_msg)
@@ -55,8 +53,8 @@ class LMDBReader:
         if self.env:
             self.env.close()
             self.env = None
-            logger.info("LMDB database closed")
-    
+            logger.debug("LMDB database closed")
+
     def _ensure_open(self):
         """Ensure database is open, raise error if not."""
         if not self.env:
@@ -94,7 +92,7 @@ class LMDBReader:
     def get_env_info(self) -> dict[str, int]:
         """Get LMDB environment information including mapsize."""
         self._ensure_open()
-        
+
         info = self.env.info()
         return {
             "map_size": info["map_size"],
@@ -118,11 +116,10 @@ class LMDBReader:
         with self.env.begin() as txn:
             cursor = txn.cursor()
             cursor.set_range(prefix)
-            
-            return list(islice(
-                (key for key, _ in cursor if key.startswith(prefix)), 
-                limit
-            ))
+
+            return list(
+                islice((key for key, _ in cursor if key.startswith(prefix)), limit)
+            )
 
     def get_first_n_entries(self, n: int = 10) -> list[tuple[bytes, bytes]]:
         """Get the first N entries from the database."""
@@ -133,14 +130,16 @@ class LMDBReader:
             cursor.first()
             return list(islice(cursor, n))
 
-    def search_keys_by_index(self, start_index: int, count: int = 10) -> list[tuple[bytes, bytes]]:
+    def search_keys_by_index(
+        self, start_index: int, count: int = 10
+    ) -> list[tuple[bytes, bytes]]:
         """Get entries by index range for pagination."""
         self._ensure_open()
 
         with self.env.begin() as txn:
             cursor = txn.cursor()
             cursor.first()
-            
+
             # Skip to start_index and collect count entries
             all_entries = islice(cursor, start_index + count)
             return list(islice(all_entries, start_index, None))
@@ -161,14 +160,14 @@ class LMDBReader:
         self._ensure_open()
 
         pattern_bytes = pattern.encode("utf-8", errors="ignore")
-        
+
         def key_generator():
             with self.env.begin() as txn:
                 cursor = txn.cursor()
                 cursor.first()
-                
+
                 for key, _ in cursor:
                     if pattern_bytes in key:
                         yield key
-        
+
         return list(islice(key_generator(), limit))

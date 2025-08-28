@@ -13,7 +13,9 @@ logger = get_logger(__name__)
 
 
 def main(
-    db_path: str = typer.Argument(None, help="Path to LMDB database directory"),
+    db_path: str = typer.Option(
+        None, "--db-path", "-d", help="Path to LMDB database directory"
+    ),
     protobuf_module: str = typer.Option(
         None,
         "--protobuf-module",
@@ -39,14 +41,17 @@ def main(
 
     Examples:
 
+      # Basic usage without database path (set via web interface)
+      lmdbug
+
       # Basic usage with database path
-      lmdbug /path/to/lmdb/database
+      lmdbug --db-path /path/to/lmdb/database
 
       # With protobuf support
-      lmdbug /path/to/lmdb/database --protobuf-module user_pb2.py --message-class User
+      lmdbug -d /path/to/lmdb/database --protobuf-module user_pb2.py --message-class User
 
       # Custom host and port
-      lmdbug /path/to/lmdb/database --host 0.0.0.0 --port 8080
+      lmdbug --db-path /path/to/lmdb/database --host 0.0.0.0 --port 8080
     """
     # Show version
     if version:
@@ -92,6 +97,7 @@ def main(
         typer.echo(f"   URL: http://{host}:{port}")
 
         interface = LmdbugInterface()
+        logger.info("Lmdbug interface initialized")
 
         # Pre-configure if parameters provided
         if db_path or protobuf_config:
