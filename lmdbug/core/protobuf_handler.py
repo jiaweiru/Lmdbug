@@ -1,6 +1,5 @@
 import importlib.util
 from pathlib import Path
-import os
 
 from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict
@@ -25,11 +24,18 @@ class ProtobufHandler:
         ] = {}  # processor_name -> processor_function
 
     def load_compiled_proto_module(self, module_path: str, message_class_name: str):
-        """Load a compiled protobuf Python module."""
+        """Loads a compiled protobuf Python module.
+        
+        Args:
+            module_path: Path to the compiled .py module.
+            message_class_name: Name of the protobuf message class.
+            
+        Raises:
+            ProtobufError: If module loading fails.
+        """
         module_path_obj = Path(module_path)
         normalized_path = str(module_path_obj.resolve())
 
-        # Check if this exact combination already exists
         if message_class_name in self.loaded_messages:
             existing_path = self.module_class_registry.get(message_class_name)
             if existing_path == normalized_path:
@@ -48,7 +54,6 @@ class ProtobufHandler:
             logger.error(error_msg)
             raise ProtobufError(error_msg)
 
-        # Load the module with unique name based on file path
         try:
             module_name = f"proto_module_{module_path_obj.stem}_{hash(normalized_path) & 0x7FFFFFFF}"
             spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -65,7 +70,6 @@ class ProtobufHandler:
             logger.error(error_msg)
             raise ProtobufError(error_msg) from e
 
-        # Get the message class
         if not hasattr(proto_module, message_class_name):
             error_msg = f"Message class '{message_class_name}' not found in module {module_path}"
             logger.error(error_msg)
@@ -80,7 +84,18 @@ class ProtobufHandler:
         )
 
     def deserialize(self, data: bytes, message_type: str) -> Message:
-        """Deserialize binary data to a protobuf message."""
+        """Deserializes binary data to a protobuf message.
+        
+        Args:
+            data: Binary protobuf data.
+            message_type: Name of the message type to deserialize as.
+            
+        Returns:
+            Deserialized protobuf message.
+            
+        Raises:
+            ProtobufError: If deserialization fails.
+        """
         if message_type not in self.loaded_messages:
             available = list(self.loaded_messages.keys())
             error_msg = (
@@ -101,7 +116,17 @@ class ProtobufHandler:
             raise ProtobufError(error_msg) from e
 
     def message_to_dict(self, message: Message) -> dict:
-        """Convert a protobuf message to a dictionary."""
+        """Converts a protobuf message to a dictionary.
+        
+        Args:
+            message: Protobuf message to convert.
+            
+        Returns:
+            Dictionary representation of the message.
+            
+        Raises:
+            ProtobufError: If conversion fails.
+        """
         try:
             return MessageToDict(message, preserving_proto_field_name=True)
         except Exception as e:
@@ -110,15 +135,19 @@ class ProtobufHandler:
             raise ProtobufError(error_msg) from e
 
     def get_loaded_message_types(self) -> list[str]:
-        """Get list of loaded message type names."""
+        """Gets list of loaded message type names.
+        
+        Returns:
+            List of loaded message type names.
+        """
         return list(self.loaded_messages.keys())
 
     def register_custom_processor(self, processor_name: str, processor_func: callable):
-        """Register a custom field processor function.
+        """Registers a custom field processor function.
 
         Args:
-            processor_name: Name of the processor
-            processor_func: Function with signature (field_name: str, value: any, config: dict) -> dict
+            processor_name: Name of the processor.
+            processor_func: Function with signature (field_name: str, value: any, config: dict) -> dict.
         """
         self.custom_processors[processor_name] = processor_func
         logger.info(f"Registered custom processor: {processor_name}")
@@ -127,7 +156,7 @@ class ProtobufHandler:
         """Decorator to register a custom field processor.
 
         Args:
-            processor_name: Name of the processor
+            processor_name: Name of the processor.
 
         Usage:
             @protobuf_handler.custom_processor("pcm_audio")
@@ -145,15 +174,15 @@ class ProtobufHandler:
     def process_media_fields(
         self, data_dict: dict, field_config: dict[str, dict]
     ) -> dict:
-        """Process media fields using custom processors.
+        """Processes media fields using custom processors.
 
         Args:
-            data_dict: Protobuf message converted to dict
-            field_config: Mapping of field names to processor configs
+            data_dict: Protobuf message converted to dict.
+            field_config: Mapping of field names to processor configs.
                          e.g. {"audio_data": {"processor": "pcm_audio", "config": {...}}}
 
         Returns:
-            Dict with media previews for configured fields
+            Dictionary with media previews for configured fields.
         """
         media_previews = {"text": [], "audio": [], "image": [], "custom": []}
 
@@ -171,7 +200,6 @@ class ProtobufHandler:
                         field_name, field_value, processor_config
                     )
                     if result:
-                        # Categorize result based on type
                         result_type = result.get("type", "custom")
                         if result_type in media_previews:
                             media_previews[result_type].append(result)
@@ -189,11 +217,17 @@ class ProtobufHandler:
         return media_previews
 
     def cleanup_temp_files(self, temp_paths: list[str]):
-        """Clean up temporary preview files."""
+        """Cleans up temporary preview files.
+        
+        Args:
+            temp_paths: List of file paths to remove.
+        """
         for path in temp_paths:
             try:
-                if path and os.path.exists(path):
-                    os.unlink(path)
-                    logger.debug(f"Cleaned up temp file: {path}")
+                if path:
+                    path_obj = Path(path)
+                    if path_obj.exists():
+                        path_obj.unlink()
+                        logger.debug(f"Cleaned up temp file: {path}")
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp file {path}: {e}")

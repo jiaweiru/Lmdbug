@@ -2,10 +2,8 @@ import sys
 from pathlib import Path
 from loguru import logger
 
-# Remove default handler to have full control
 logger.remove()
 
-# Add default console handler
 logger.add(
     sys.stderr,
     level="INFO",
@@ -31,14 +29,11 @@ def setup(
         file: Optional log file path
         colorize: Enable colors (auto-detects if None)
     """
-    # Remove all existing handlers
     logger.remove()
 
-    # Auto-detect colorize setting
     if colorize is None:
         colorize = sys.stderr.isatty()
 
-    # Console format
     format_str = (
         (
             "<green>{time:HH:mm:ss}</green> | "
@@ -50,7 +45,6 @@ def setup(
         else ("{time:HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}")
     )
 
-    # Console handler
     logger.add(
         sys.stderr,
         level=level,
@@ -60,7 +54,6 @@ def setup(
         diagnose=True,
     )
 
-    # File handler if requested
     if file:
         file_path = Path(file)
         file_path.parent.mkdir(parents=True, exist_ok=True)

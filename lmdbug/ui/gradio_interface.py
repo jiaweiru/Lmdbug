@@ -18,6 +18,7 @@ class LmdbugInterface:
         self.current_protobuf_config: dict[str, str] = {}
         self.initial_db_path: str | None = None
         self.initial_protobuf_config: dict[str, str] | None = None
+        self.current_temp_files: list[str] = []
 
     def create_interface(self) -> gr.Blocks:
         """
@@ -36,7 +37,6 @@ class LmdbugInterface:
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    # Database and Protobuf Configuration Section
                     gr.Markdown("## Database Configuration")
 
                     db_path_input = gr.Textbox(
@@ -67,7 +67,6 @@ class LmdbugInterface:
                         "🔌 Load/Reload Protobuf", variant="secondary"
                     )
 
-                    # Current Configuration Display
                     gr.Markdown("### Current Configuration")
                     config_status = gr.Textbox(
                         label="Status",
@@ -76,10 +75,8 @@ class LmdbugInterface:
                         max_lines=3,
                     )
 
-                    # Database Info Display
                     db_info_display = gr.JSON(label="Database Information", value={})
 
-                    # Protobuf Message Type Selection
                     message_type_dropdown = gr.Dropdown(
                         label="Primary Protobuf Message Type",
                         choices=[],
@@ -87,7 +84,6 @@ class LmdbugInterface:
                         interactive=True,
                     )
 
-                    # Custom Processors Section
                     gr.Markdown("### Custom Processors")
                     processor_file_input = gr.Textbox(
                         label="Custom Processor File Path",
@@ -95,7 +91,6 @@ class LmdbugInterface:
                     )
                     processor_load_btn = gr.Button("🔌 Load Processors")
 
-                    # Field Configuration Section
                     gr.Markdown("### Field Configuration")
                     with gr.Row():
                         config_file_input = gr.Textbox(
@@ -113,11 +108,9 @@ class LmdbugInterface:
                     field_config_btn = gr.Button("🔧 Apply Field Config")
 
                 with gr.Column(scale=2):
-                    # Search and Preview Section
                     gr.Markdown("## Data Preview and Search")
 
                     with gr.Tabs():
-                        # Preview Tab
                         with gr.TabItem("Browse"):
                             with gr.Row():
                                 preview_count = gr.Number(
@@ -137,7 +130,6 @@ class LmdbugInterface:
                                 )
                                 index_btn = gr.Button("Browse by Index")
 
-                        # Key Search Tab
                         with gr.TabItem("Key Search"):
                             exact_key_input = gr.Textbox(
                                 label="Exact Key",
@@ -162,15 +154,12 @@ class LmdbugInterface:
                             )
                             pattern_search_btn = gr.Button("Search by Pattern")
 
-                    # Results Display
                     results_display = gr.JSON(
                         label="Results", value=[], show_label=True
                     )
 
-                    # Media Preview Section
                     with gr.Row():
                         with gr.Column():
-                            # Text Preview
                             text_preview = gr.Textbox(
                                 label="Text Content",
                                 lines=10,
@@ -179,22 +168,19 @@ class LmdbugInterface:
                             )
                         
                         with gr.Column():
-                            # Audio Preview
                             audio_preview = gr.Audio(
                                 label="Audio Content"
                             )
                             
-                            # Image Preview  
+  
                             image_preview = gr.Image(
                                 label="Image Content"
                             )
 
-            # Status Messages
             status_display = gr.Textbox(
                 label="Status", value="Ready to load database", interactive=False
             )
 
-            # Event Handlers
             db_load_btn.click(
                 fn=self._load_database,
                 inputs=[db_path_input],
@@ -553,6 +539,8 @@ class LmdbugInterface:
 
     def _extract_media_previews(self, results: list[dict]) -> tuple[str, str | None, str | None]:
         """Extract media previews from search results."""
+        self._cleanup_temp_files()
+        
         text_content = ""
         audio_path = None
         image_path = None
@@ -561,7 +549,6 @@ class LmdbugInterface:
             if "media_previews" in result:
                 media_previews = result["media_previews"]
                 
-                # Extract text content
                 if media_previews.get("text"):
                     text_parts = []
                     for text_field in media_previews["text"]:
@@ -570,15 +557,35 @@ class LmdbugInterface:
                         text_parts.append(f"[{field_name}]\n{content}\n")
                     text_content = "\n".join(text_parts)
                 
-                # Extract first audio file
                 if media_previews.get("audio") and not audio_path:
                     audio_path = media_previews["audio"][0].get("temp_path")
+                    if audio_path:
+                        self.current_temp_files.append(audio_path)
                 
-                # Extract first image file
                 if media_previews.get("image") and not image_path:
                     image_path = media_previews["image"][0].get("temp_path")
+                    if image_path:
+                        self.current_temp_files.append(image_path)
         
         return text_content, audio_path, image_path
+
+    def _cleanup_temp_files(self):
+        """Cleans up current temporary files."""
+        if self.current_temp_files:
+            if self.preview_service:
+                self.preview_service.cleanup_temp_files(self.current_temp_files)
+            else:
+                from pathlib import Path
+                for path in self.current_temp_files:
+                    try:
+                        if path:
+                            path_obj = Path(path)
+                            if path_obj.exists():
+                                path_obj.unlink()
+                                logger.debug(f"Cleaned up temp file: {path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup temp file {path}: {e}")
+            self.current_temp_files.clear()
 
     def launch(self, **kwargs):
         """
@@ -588,4 +595,8 @@ class LmdbugInterface:
             **kwargs: Additional arguments for gr.Interface.launch()
         """
         interface = self.create_interface()
-        interface.launch(**kwargs)
+        try:
+            interface.launch(**kwargs)
+        finally:
+            self._cleanup_temp_files()
+            logger.info("Cleaned up temporary files on interface shutdown")

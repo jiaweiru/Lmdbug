@@ -53,16 +53,13 @@ def main(
       # Custom host and port
       lmdbug --db-path /path/to/lmdb/database --host 0.0.0.0 --port 8080
     """
-    # Show version
     if version:
         typer.echo("Lmdbug version 0.1.0")
         raise typer.Exit()
 
-    # Setup logging
     setup_logging(level=log_level)
 
     try:
-        # Validate database path if provided
         if db_path:
             if not Path(db_path).exists():
                 typer.echo(f"✗ Database path does not exist: {db_path}")
@@ -73,7 +70,6 @@ def main(
                 "⚠ No database path specified. You can set it through the web interface."
             )
 
-        # Validate protobuf module if provided
         protobuf_config = None
         if protobuf_module:
             if not message_class:
@@ -90,7 +86,6 @@ def main(
             }
             typer.echo(f"✓ Protobuf module: {protobuf_module} -> {message_class}")
 
-        # Create and launch the interface
         typer.echo("🚀 Starting Lmdbug web interface...")
         typer.echo(f"   Host: {host}")
         typer.echo(f"   Port: {port}")
@@ -99,13 +94,16 @@ def main(
         interface = LmdbugInterface()
         logger.info("Lmdbug interface initialized")
 
-        # Pre-configure if parameters provided
         if db_path or protobuf_config:
             interface.set_initial_config(
                 db_path=db_path, protobuf_config=protobuf_config
             )
 
-        interface.launch(server_name=host, server_port=port, share=False, quiet=False)
+        try:
+            interface.launch(server_name=host, server_port=port, share=False, quiet=False)
+        finally:
+            interface._cleanup_temp_files()
+            logger.info("Application shutdown - cleaned up temporary files")
 
     except KeyboardInterrupt:
         typer.echo("\n👋 Lmdbug stopped by user")

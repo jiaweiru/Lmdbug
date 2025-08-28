@@ -28,11 +28,15 @@ class PreviewService:
     def load_protobuf_modules(
         self, modules: list[dict[str, str]], default_message_type: str | None = None
     ) -> None:
-        """Load protobuf modules.
+        """Loads protobuf modules.
+        
+        Args:
+            modules: List of module configurations with 'path' and 'message_class'.
+            default_message_type: Default message type to set.
         
         Raises:
-            ProtobufError: If any protobuf module fails to load
-            ValueError: If module configuration is invalid
+            ProtobufError: If any protobuf module fails to load.
+            ValueError: If module configuration is invalid.
         """
         if not modules:
             raise ValueError("No protobuf modules provided")
@@ -74,13 +78,24 @@ class PreviewService:
         logger.info(f"Successfully loaded {loaded_count} protobuf modules")
 
     def set_message_type(self, message_type: str):
-        """Set the current message type for protobuf deserialization."""
+        """Sets the current message type for protobuf deserialization.
+        
+        Args:
+            message_type: Name of the protobuf message type.
+            
+        Raises:
+            ValueError: If message type is not loaded.
+        """
         if message_type not in self.protobuf_handler.get_loaded_message_types():
             raise ValueError(f"Message type '{message_type}' not loaded")
         self.current_message_type = message_type
 
     def get_database_info(self) -> dict:
-        """Get information about the LMDB database."""
+        """Gets information about the LMDB database.
+        
+        Returns:
+            Dictionary with database information.
+        """
         with self.lmdb_reader as reader:
             return {
                 "database_path": str(self.db_path),
@@ -91,7 +106,14 @@ class PreviewService:
             }
 
     def preview_first_entries(self, count: int = 10) -> list[dict]:
-        """Preview the first N entries from the database."""
+        """Previews the first N entries from the database.
+        
+        Args:
+            count: Number of entries to preview.
+            
+        Returns:
+            List of formatted entries.
+        """
         with self.lmdb_reader as reader:
             entries = reader.get_first_n_entries(count)
             return [
@@ -100,7 +122,15 @@ class PreviewService:
             ]
 
     def preview_by_index_range(self, start_index: int, count: int = 10) -> list[dict]:
-        """Preview entries by index range."""
+        """Previews entries by index range.
+        
+        Args:
+            start_index: Starting index.
+            count: Number of entries to preview.
+            
+        Returns:
+            List of formatted entries.
+        """
         with self.lmdb_reader as reader:
             entries = reader.search_keys_by_index(start_index, count)
             return [
@@ -109,7 +139,14 @@ class PreviewService:
             ]
 
     def search_by_key(self, key: str) -> dict:
-        """Search for a specific key."""
+        """Searches for a specific key.
+        
+        Args:
+            key: Key to search for.
+            
+        Returns:
+            Formatted entry or error information.
+        """
         key_bytes = key.encode("utf-8")
         with self.lmdb_reader as reader:
             value = reader.get_by_key(key_bytes)
@@ -118,20 +155,44 @@ class PreviewService:
             return self._format_entry(key_bytes, value)
 
     def search_by_key_prefix(self, prefix: str, limit: int = 100) -> list[dict]:
-        """Search for keys with a specific prefix."""
+        """Searches for keys with a specific prefix.
+        
+        Args:
+            prefix: Key prefix to search for.
+            limit: Maximum number of results.
+            
+        Returns:
+            List of formatted entries.
+        """
         prefix_bytes = prefix.encode("utf-8")
         with self.lmdb_reader as reader:
             keys = reader.get_keys_with_prefix(prefix_bytes, limit)
             return self._get_entries_by_keys(reader, keys)
 
     def search_by_pattern(self, pattern: str, limit: int = 100) -> list[dict]:
-        """Search for keys matching a pattern."""
+        """Searches for keys matching a pattern.
+        
+        Args:
+            pattern: Pattern to search for in keys.
+            limit: Maximum number of results.
+            
+        Returns:
+            List of formatted entries.
+        """
         with self.lmdb_reader as reader:
             keys = reader.search_keys_by_pattern(pattern, limit)
             return self._get_entries_by_keys(reader, keys)
 
     def _get_entries_by_keys(self, reader, keys: list[bytes]) -> list[dict]:
-        """Get and format entries by keys, filtering out None values."""
+        """Gets and formats entries by keys, filtering out None values.
+        
+        Args:
+            reader: LMDB reader instance.
+            keys: List of keys to fetch.
+            
+        Returns:
+            List of formatted entries.
+        """
         entries = [(key, reader.get_by_key(key)) for key in keys]
         valid_entries = [(k, v) for k, v in entries if v is not None]
         return [
@@ -140,7 +201,15 @@ class PreviewService:
         ]
 
     def _format_entry(self, key_bytes: bytes, value_bytes: bytes) -> dict:
-        """Format a single entry."""
+        """Formats a single entry.
+        
+        Args:
+            key_bytes: Raw key bytes.
+            value_bytes: Raw value bytes.
+            
+        Returns:
+            Dictionary with formatted entry information.
+        """
         return {
             "key": self._format_key(key_bytes) or key_bytes.hex(),
             "key_raw": key_bytes.hex(),
@@ -149,14 +218,28 @@ class PreviewService:
         }
 
     def _format_key(self, key_bytes: bytes) -> str | None:
-        """Format a key for display."""
+        """Formats a key for display.
+        
+        Args:
+            key_bytes: Raw key bytes.
+            
+        Returns:
+            UTF-8 decoded key string or None if decoding fails.
+        """
         try:
             return key_bytes.decode("utf-8")
         except UnicodeDecodeError:
             return None
 
     def _format_value(self, value_bytes: bytes) -> dict:
-        """Format a value for display."""
+        """Formats a value for display.
+        
+        Args:
+            value_bytes: Raw value bytes.
+            
+        Returns:
+            Dictionary with formatted value information.
+        """
         result = {"raw_hex": value_bytes.hex(), "size": len(value_bytes)}
 
         if self._should_try_protobuf():
@@ -165,7 +248,11 @@ class PreviewService:
         return result
 
     def _should_try_protobuf(self) -> bool:
-        """Check if protobuf deserialization should be attempted."""
+        """Checks if protobuf deserialization should be attempted.
+        
+        Returns:
+            True if protobuf deserialization should be tried.
+        """
         return (
             self.current_message_type
             and self.current_message_type
@@ -175,7 +262,13 @@ class PreviewService:
     def _add_protobuf_info(
         self, result: dict, value_bytes: bytes, message_type: str | None
     ) -> None:
-        """Add protobuf information to result dict."""
+        """Adds protobuf information to result dict.
+        
+        Args:
+            result: Result dictionary to update.
+            value_bytes: Raw value bytes to deserialize.
+            message_type: Protobuf message type name.
+        """
         if (
             not message_type
             or message_type not in self.protobuf_handler.get_loaded_message_types()
@@ -193,7 +286,6 @@ class PreviewService:
             }
             result["message_type_used"] = message_type
             
-            # Process media fields if configured
             field_config = self.get_field_config(message_type)
             if field_config:
                 media_previews = self.protobuf_handler.process_media_fields(
@@ -215,33 +307,44 @@ class PreviewService:
             result["protobuf_error"] = f"Unexpected error with type '{message_type}': {str(e)}"
 
     def get_available_message_types(self) -> list[str]:
-        """Get list of available protobuf message types."""
+        """Gets list of available protobuf message types.
+        
+        Returns:
+            List of message type names.
+        """
         return self.protobuf_handler.get_loaded_message_types()
 
     def set_field_config(self, message_type: str, config: dict[str, dict]):
-        """Set field configuration for a message type.
+        """Sets field configuration for a message type.
         
         Args:
-            message_type: The protobuf message type name
-            config: Field configuration mapping field names to processor configs
+            message_type: The protobuf message type name.
+            config: Field configuration mapping field names to processor configs.
                     e.g. {"audio_data": {"processor": "pcm_audio", "config": {"sample_rate": 16000}}}
         """
         self.field_config[message_type] = config
         logger.info(f"Updated field config for {message_type}: {config}")
 
     def get_field_config(self, message_type: str | None = None) -> dict[str, dict]:
-        """Get field configuration for a message type."""
+        """Gets field configuration for a message type.
+        
+        Args:
+            message_type: Message type name, uses current type if None.
+            
+        Returns:
+            Field configuration dictionary.
+        """
         if message_type is None:
             message_type = self.current_message_type
         return self.field_config.get(message_type, {})
 
     def register_custom_processor(self, processor_name: str, processor_func: callable):
-        """Register a custom field processor function.
+        """Registers a custom field processor function.
         
         Args:
-            processor_name: Name of the processor
-            processor_func: Function with signature (field_name: str, value: any, config: dict) -> dict
-                          Should return dict with keys: type, field_name, and other preview data
+            processor_name: Name of the processor.
+            processor_func: Function with signature (field_name: str, value: any, config: dict) -> dict.
+                          Should return dict with keys: type, field_name, and other preview data.
         """
         self.protobuf_handler.register_custom_processor(processor_name, processor_func)
 
@@ -249,7 +352,7 @@ class PreviewService:
         """Decorator to register a custom field processor.
         
         Args:
-            processor_name: Name of the processor
+            processor_name: Name of the processor.
             
         Usage:
             @preview_service.custom_processor("pcm_audio")
@@ -260,22 +363,21 @@ class PreviewService:
         return self.protobuf_handler.custom_processor(processor_name)
 
     def load_custom_processors(self, processor_file_path: str) -> None:
-        """Load custom processors from a Python file.
+        """Loads custom processors from a Python file.
         
         Args:
-            processor_file_path: Path to the Python file containing custom processors
+            processor_file_path: Path to the Python file containing custom processors.
             
         Raises:
-            FileNotFoundError: If processor file doesn't exist
-            ImportError: If file cannot be imported
-            SyntaxError: If file has syntax errors
-            ValueError: If file doesn't contain required functions
+            FileNotFoundError: If processor file doesn't exist.
+            ImportError: If file cannot be imported.
+            SyntaxError: If file has syntax errors.
+            ValueError: If file doesn't contain required functions.
         """
         processor_path = Path(processor_file_path)
         if not processor_path.exists():
             raise FileNotFoundError(f"Processor file not found: {processor_file_path}")
 
-        # Load the module
         spec = importlib.util.spec_from_file_location(
             f"custom_processors_{processor_path.stem}", 
             processor_file_path
@@ -286,7 +388,6 @@ class PreviewService:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        # Get registered processors from the module
         if not hasattr(module, 'get_registered_processors'):
             raise ValueError(f"Module {processor_file_path} must have a 'get_registered_processors' function")
         
@@ -313,19 +414,19 @@ class PreviewService:
         logger.info(f"Successfully loaded {loaded_count} custom processors from {processor_file_path}")
 
     def load_field_config_from_file(self, config_file_path: str) -> dict:
-        """Load field configuration from JSON file.
+        """Loads field configuration from JSON file.
         
         Args:
-            config_file_path: Path to the JSON configuration file
+            config_file_path: Path to the JSON configuration file.
             
         Returns:
-            Configuration dict
+            Configuration dictionary.
             
         Raises:
-            FileNotFoundError: If config file doesn't exist
-            json.JSONDecodeError: If file contains invalid JSON
-            PermissionError: If file cannot be read
-            ValueError: If config structure is invalid
+            FileNotFoundError: If config file doesn't exist.
+            json.JSONDecodeError: If file contains invalid JSON.
+            PermissionError: If file cannot be read.
+            ValueError: If config structure is invalid.
         """
         config_path = Path(config_file_path)
         if not config_path.exists():
@@ -340,7 +441,6 @@ class PreviewService:
                 e.doc, e.pos
             )
         
-        # Validate config structure
         if not isinstance(config, dict):
             raise ValueError(f"Config file {config_file_path} must contain a JSON object at root level")
         
@@ -350,3 +450,11 @@ class PreviewService:
         message_types = len(config)
         logger.info(f"Loaded field configuration with {message_types} message types from {config_file_path}")
         return config
+
+    def cleanup_temp_files(self, temp_paths: list[str]):
+        """Cleans up temporary files using the protobuf handler.
+        
+        Args:
+            temp_paths: List of temporary file paths to clean up.
+        """
+        self.protobuf_handler.cleanup_temp_files(temp_paths)

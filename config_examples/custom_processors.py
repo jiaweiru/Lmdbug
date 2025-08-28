@@ -30,24 +30,20 @@ Example:
 
 import tempfile
 import wave
-import struct
 import base64
-import os
 from pathlib import Path
-from typing import Dict, Any, Callable
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Global registry for processors
-_PROCESSORS: Dict[str, Callable] = {}
+_PROCESSORS: dict[str, callable] = {}
 
 
 def processor(name: str):
     """Decorator to register a custom field processor.
     
     Args:
-        name: Name of the processor
+        name: Name of the processor.
         
     Usage:
         @processor("pcm_audio")
@@ -62,21 +58,33 @@ def processor(name: str):
     return decorator
 
 
-def get_registered_processors() -> Dict[str, Callable]:
-    """Get all registered processors."""
+def get_registered_processors() -> dict[str, callable]:
+    """Gets all registered processors.
+    
+    Returns:
+        Dictionary mapping processor names to functions.
+    """
     return _PROCESSORS.copy()
 
 
 def clear_processors():
-    """Clear all registered processors."""
+    """Clears all registered processors."""
     global _PROCESSORS
     _PROCESSORS.clear()
 
 
-# Built-in processor examples
 @processor("simple_text")
 def process_simple_text(field_name: str, value: str, config: dict) -> dict:
-    """Process simple text fields."""
+    """Processes simple text fields.
+    
+    Args:
+        field_name: Name of the field.
+        value: Text content.
+        config: Processing configuration.
+        
+    Returns:
+        Dictionary with text processing results.
+    """
     if not isinstance(value, str):
         return {}
     
@@ -93,7 +101,16 @@ def process_simple_text(field_name: str, value: str, config: dict) -> dict:
 
 @processor("base64_text")
 def process_base64_text(field_name: str, value: str, config: dict) -> dict:
-    """Process base64 encoded text fields."""
+    """Processes base64 encoded text fields.
+    
+    Args:
+        field_name: Name of the field.
+        value: Base64 encoded text.
+        config: Processing configuration.
+        
+    Returns:
+        Dictionary with decoded text results.
+    """
     try:
         if isinstance(value, str):
             decoded_text = base64.b64decode(value).decode('utf-8')
@@ -116,7 +133,16 @@ def process_base64_text(field_name: str, value: str, config: dict) -> dict:
 
 @processor("pcm_audio_16khz")
 def process_pcm_audio_16khz(field_name: str, value: bytes, config: dict) -> dict:
-    """Process PCM audio data at 16kHz sample rate."""
+    """Processes PCM audio data at 16kHz sample rate.
+    
+    Args:
+        field_name: Name of the field.
+        value: PCM audio data.
+        config: Processing configuration with sample rate, channels, etc.
+        
+    Returns:
+        Dictionary with audio file path and metadata.
+    """
     try:
         sample_rate = config.get("sample_rate", 16000)
         channels = config.get("channels", 1)
@@ -161,7 +187,16 @@ def process_pcm_audio_16khz(field_name: str, value: bytes, config: dict) -> dict
 
 @processor("raw_image_rgb")
 def process_raw_image_rgb(field_name: str, value: bytes, config: dict) -> dict:
-    """Process raw RGB image data."""
+    """Processes raw RGB image data.
+    
+    Args:
+        field_name: Name of the field.
+        value: Raw RGB image bytes.
+        config: Processing configuration with width, height, channels.
+        
+    Returns:
+        Dictionary with image file path and metadata.
+    """
     try:
         width = config.get("width", 224)
         height = config.get("height", 224)
@@ -174,21 +209,17 @@ def process_raw_image_rgb(field_name: str, value: bytes, config: dict) -> dict:
         else:
             return {}
         
-        # Verify data size
         expected_size = width * height * channels
         if len(image_data) != expected_size:
             logger.warning(f"Image data size mismatch: expected {expected_size}, got {len(image_data)}")
         
-        # Convert to PNG using PIL if available
         try:
             from PIL import Image
             import numpy as np
             
-            # Reshape data to image format
             img_array = np.frombuffer(image_data, dtype=np.uint8)
             img_array = img_array.reshape((height, width, channels))
             
-            # Create PIL image
             if channels == 3:
                 img = Image.fromarray(img_array, 'RGB')
             elif channels == 1:
@@ -197,7 +228,6 @@ def process_raw_image_rgb(field_name: str, value: bytes, config: dict) -> dict:
                 logger.error(f"Unsupported channel count: {channels}")
                 return {}
             
-            # Save as PNG
             with tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix=f"_{field_name}.png",
@@ -228,7 +258,16 @@ def process_raw_image_rgb(field_name: str, value: bytes, config: dict) -> dict:
 
 @processor("hex_display")
 def process_hex_display(field_name: str, value: bytes, config: dict) -> dict:
-    """Display raw data as hex string."""
+    """Displays raw data as hex string.
+    
+    Args:
+        field_name: Name of the field.
+        value: Raw bytes to display.
+        config: Processing configuration.
+        
+    Returns:
+        Dictionary with hex representation.
+    """
     try:
         if isinstance(value, str):
             hex_data = value
@@ -253,13 +292,18 @@ def process_hex_display(field_name: str, value: bytes, config: dict) -> dict:
         return {}
 
 
-# Cleanup utility
 def cleanup_temp_files(temp_paths: list[str]):
-    """Clean up temporary preview files."""
+    """Cleans up temporary preview files.
+    
+    Args:
+        temp_paths: List of file paths to remove.
+    """
     for path in temp_paths:
         try:
-            if path and os.path.exists(path):
-                os.unlink(path)
-                logger.debug(f"Cleaned up temp file: {path}")
+            if path:
+                path_obj = Path(path)
+                if path_obj.exists():
+                    path_obj.unlink()
+                    logger.debug(f"Cleaned up temp file: {path}")
         except Exception as e:
             logger.warning(f"Failed to cleanup temp file {path}: {e}")

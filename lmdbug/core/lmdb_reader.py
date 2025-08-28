@@ -140,7 +140,6 @@ class LMDBReader:
             cursor = txn.cursor()
             cursor.first()
 
-            # Skip to start_index and collect count entries
             all_entries = islice(cursor, start_index + count)
             return list(islice(all_entries, start_index, None))
 
