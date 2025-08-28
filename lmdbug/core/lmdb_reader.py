@@ -1,12 +1,10 @@
 import lmdb
 from pathlib import Path
-from loguru import logger
-from .exceptions import (
-    DatabaseNotFoundError,
-    DatabasePathError,
-    DatabaseNotOpenError,
-    DatabaseConnectionError,
-)
+from itertools import islice
+from .logging import get_logger
+from .exceptions import DatabaseError
+
+logger = get_logger(__name__)
 
 
 class LMDBReader:
@@ -14,9 +12,15 @@ class LMDBReader:
     LMDB database reader with support for key-based queries and data preview.
     """
 
-    def __init__(self, db_path: str):
-        """Initialize LMDB reader."""
+    def __init__(self, db_path: str, map_size: int = 10 * 1024 * 1024 * 1024):
+        """Initialize LMDB reader.
+        
+        Args:
+            db_path: Path to the LMDB database
+            map_size: Maximum size of the database in bytes (default: 10GB)
+        """
         self.db_path = Path(db_path)
+        self.map_size = map_size
         self.env = None
         self._validate_path()
 
@@ -25,21 +29,26 @@ class LMDBReader:
         if not self.db_path.exists():
             error_msg = f"LMDB database path not found: {self.db_path}"
             logger.error(error_msg)
-            raise DatabaseNotFoundError(error_msg)
+            raise DatabaseError(error_msg)
         if not self.db_path.is_dir():
             error_msg = f"LMDB path must be a directory, got: {self.db_path}"
             logger.error(error_msg)
-            raise DatabasePathError(error_msg)
+            raise DatabaseError(error_msg)
 
     def open(self):
         """Open the LMDB environment."""
         try:
-            self.env = lmdb.open(str(self.db_path), readonly=True, lock=False)
-            logger.info(f"Successfully opened LMDB database: {self.db_path}")
+            self.env = lmdb.open(
+                str(self.db_path), 
+                readonly=True, 
+                lock=False,
+                map_size=self.map_size
+            )
+            logger.info(f"Successfully opened LMDB database: {self.db_path} with map_size: {self.map_size}")
         except Exception as e:
             error_msg = f"Failed to open LMDB database at {self.db_path}: {e}"
             logger.error(error_msg)
-            raise DatabaseConnectionError(error_msg) from e
+            raise DatabaseError(error_msg) from e
 
     def close(self):
         """Close the LMDB environment."""
@@ -53,7 +62,7 @@ class LMDBReader:
         if not self.env:
             error_msg = "Database not opened. Call open() first."
             logger.error(error_msg)
-            raise DatabaseNotOpenError(error_msg)
+            raise DatabaseError(error_msg)
 
     def __enter__(self):
         """Context manager entry."""
@@ -82,6 +91,19 @@ class LMDBReader:
                 "overflow_pages": stats["overflow_pages"],
             }
 
+    def get_env_info(self) -> dict[str, int]:
+        """Get LMDB environment information including mapsize."""
+        self._ensure_open()
+        
+        info = self.env.info()
+        return {
+            "map_size": info["map_size"],
+            "last_pgno": info["last_pgno"],
+            "last_txnid": info["last_txnid"],
+            "max_readers": info["max_readers"],
+            "num_readers": info["num_readers"],
+        }
+
     def get_by_key(self, key: bytes) -> bytes | None:
         """Get value by exact key match."""
         self._ensure_open()
@@ -93,19 +115,14 @@ class LMDBReader:
         """Get keys that start with the given prefix."""
         self._ensure_open()
 
-        keys = []
         with self.env.begin() as txn:
             cursor = txn.cursor()
             cursor.set_range(prefix)
             
-            for key, _ in cursor:
-                if not key.startswith(prefix):
-                    break
-                keys.append(key)
-                if len(keys) >= limit:
-                    break
-        
-        return keys
+            return list(islice(
+                (key for key, _ in cursor if key.startswith(prefix)), 
+                limit
+            ))
 
     def get_first_n_entries(self, n: int = 10) -> list[tuple[bytes, bytes]]:
         """Get the first N entries from the database."""
@@ -114,7 +131,7 @@ class LMDBReader:
         with self.env.begin() as txn:
             cursor = txn.cursor()
             cursor.first()
-            return [(key, value) for key, value in cursor][:n]
+            return list(islice(cursor, n))
 
     def search_keys_by_index(self, start_index: int, count: int = 10) -> list[tuple[bytes, bytes]]:
         """Get entries by index range for pagination."""
@@ -124,13 +141,9 @@ class LMDBReader:
             cursor = txn.cursor()
             cursor.first()
             
-            # Skip to start_index
-            for _ in range(start_index):
-                if not cursor.next():
-                    return []
-            
-            # Collect count entries
-            return [(key, value) for key, value in cursor][:count]
+            # Skip to start_index and collect count entries
+            all_entries = islice(cursor, start_index + count)
+            return list(islice(all_entries, start_index, None))
 
     def iter_all_entries(self):
         """Iterator over all entries in the database."""
@@ -148,19 +161,14 @@ class LMDBReader:
         self._ensure_open()
 
         pattern_bytes = pattern.encode("utf-8", errors="ignore")
-        matching_keys = []
         
-        with self.env.begin() as txn:
-            cursor = txn.cursor()
-            cursor.first()
-            
-            for key, _ in cursor:
-                if len(matching_keys) >= limit:
-                    break
-                try:
+        def key_generator():
+            with self.env.begin() as txn:
+                cursor = txn.cursor()
+                cursor.first()
+                
+                for key, _ in cursor:
                     if pattern_bytes in key:
-                        matching_keys.append(key)
-                except Exception as e:
-                    logger.debug(f"Skipping key comparison due to error: {e}")
+                        yield key
         
-        return matching_keys
+        return list(islice(key_generator(), limit))

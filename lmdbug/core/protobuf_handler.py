@@ -4,12 +4,10 @@ from pathlib import Path
 
 from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict
-from loguru import logger
-from .exceptions import (
-    ProtobufModuleNotFoundError, ProtobufModuleLoadError,
-    ProtobufMessageClassNotFoundError, ProtobufMessageTypeNotLoadedError,
-    ProtobufDeserializationError, ProtobufSerializationError
-)
+from .logging import get_logger
+from .exceptions import ProtobufError
+
+logger = get_logger(__name__)
 
 
 
@@ -43,7 +41,7 @@ class ProtobufHandler:
         if not module_path_obj.exists():
             error_msg = f"Proto module not found: {module_path}"
             logger.error(error_msg)
-            raise ProtobufModuleNotFoundError(error_msg)
+            raise ProtobufError(error_msg)
         
         # Load the module with unique name based on file path
         try:
@@ -52,7 +50,7 @@ class ProtobufHandler:
             if not spec or not spec.loader:
                 error_msg = f"Failed to create module spec for: {module_path}"
                 logger.error(error_msg)
-                raise ProtobufModuleLoadError(error_msg)
+                raise ProtobufError(error_msg)
                 
             proto_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(proto_module)
@@ -60,13 +58,13 @@ class ProtobufHandler:
         except Exception as e:
             error_msg = f"Failed to load proto module '{module_path}': {e}"
             logger.error(error_msg)
-            raise ProtobufModuleLoadError(error_msg) from e
+            raise ProtobufError(error_msg) from e
         
         # Get the message class
         if not hasattr(proto_module, message_class_name):
             error_msg = f"Message class '{message_class_name}' not found in module {module_path}"
             logger.error(error_msg)
-            raise ProtobufMessageClassNotFoundError(error_msg)
+            raise ProtobufError(error_msg)
             
         self.loaded_messages[message_class_name] = getattr(proto_module, message_class_name)
         self.module_class_registry[message_class_name] = normalized_path
@@ -79,7 +77,7 @@ class ProtobufHandler:
             available = list(self.loaded_messages.keys())
             error_msg = f"Message type '{message_type}' not loaded. Available: {available}"
             logger.error(error_msg)
-            raise ProtobufMessageTypeNotLoadedError(error_msg)
+            raise ProtobufError(error_msg)
         
         try:
             message = self.loaded_messages[message_type]()
@@ -88,7 +86,7 @@ class ProtobufHandler:
         except Exception as e:
             error_msg = f"Failed to deserialize {len(data)} bytes as {message_type}: {e}"
             logger.error(error_msg)
-            raise ProtobufDeserializationError(error_msg) from e
+            raise ProtobufError(error_msg) from e
     
     def message_to_dict(self, message: Message) -> dict:
         """Convert a protobuf message to a dictionary."""
@@ -97,28 +95,21 @@ class ProtobufHandler:
         except Exception as e:
             error_msg = f"Failed to convert protobuf message to dict: {e}"
             logger.error(error_msg)
-            raise ProtobufSerializationError(error_msg) from e
+            raise ProtobufError(error_msg) from e
     
     def message_to_json(self, message: Message, indent: int = 2) -> str:
         """Convert a protobuf message to a JSON string."""
         try:
             message_dict = self.message_to_dict(message)
             return json.dumps(message_dict, indent=indent, ensure_ascii=False)
-        except ProtobufSerializationError:
-            raise  # Re-raise serialization errors from message_to_dict
+        except ProtobufError:
+            raise  # Re-raise protobuf errors from message_to_dict
         except Exception as e:
             error_msg = f"Failed to convert protobuf message to JSON: {e}"
             logger.error(error_msg)
-            raise ProtobufSerializationError(error_msg) from e
+            raise ProtobufError(error_msg) from e
     
     
-    def try_deserialize(self, data: bytes, message_type: str) -> Message | None:
-        """Try to deserialize binary data without raising exceptions."""
-        try:
-            return self.deserialize(data, message_type)
-        except (ProtobufMessageTypeNotLoadedError, ProtobufDeserializationError):
-            logger.debug(f"Failed to deserialize {len(data)} bytes as {message_type}")
-            return None
     
     
     def get_loaded_message_types(self) -> list[str]:

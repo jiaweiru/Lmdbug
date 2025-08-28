@@ -1,285 +1,210 @@
-# Lmdbug Usage Guide
+# 🔍 Lmdbug 使用指南
 
-Lmdbug is a modern LMDB database preview tool with Protobuf deserialization support and an intuitive web interface.
+> **Lmdbug** - 强大的 LMDB 数据库预览工具，支持 Protobuf 数据解析与可视化
 
-## Quick Start
+---
 
-### Basic Usage
+## 🎨 UI 设计概述
+
+Lmdbug 的 Web 界面基于 Gradio 框架构建，采用直观的双栏布局设计，为 LMDB 数据库浏览和 Protobuf 数据解析提供用户友好的交互体验。
+
+### 📐 整体布局
+
+```
+┌─────────────────┬─────────────────────────────┐
+│   🔧 配置区域     │    📊 数据浏览区域          │
+│   (1/3 宽度)     │    (2/3 宽度)               │
+│                  │                             │
+│ • 数据库配置      │ • 数据预览标签页            │
+│ • Protobuf配置   │ • 搜索功能标签页            │
+│ • 状态信息        │ • 结果显示区域              │
+│                 │                             │
+└─────────────────┴─────────────────────────────┘
+│            📈 全局状态栏                      │
+└────────────────────────────────────────────── ───┘
+```
+
+---
+
+## 🧩 UI 组件详解
+
+### 🔧 左侧配置区域
+
+#### 1. 📁 数据库配置
+- **📂 数据库路径输入框**：指定 LMDB 数据库目录路径
+- **🚀 加载数据库按钮**：主要操作按钮，触发数据库加载
+
+#### 2. 🔌 Protobuf 配置（可选）
+- **📄 Protobuf 模块路径**：编译后的 `.pb2.py` 文件路径
+- **🏷️ 消息类名称**：Protobuf 消息类名（如 `User`, `Product` 等）
+- **📋 消息类型下拉框**：动态生成，用于选择主要解析类型
+
+#### 3. 📊 数据库信息显示
+- **📈 JSON 格式显示**：显示数据库统计信息、环境信息等
+
+### 📊 右侧数据浏览区域
+
+#### 🗂️ Browse 标签页
+- **🔍 预览前 N 条记录**：
+  - 数量输入框（1-1000）
+  - "Preview First Entries" 按钮
+
+- **📑 按索引范围浏览**：
+  - 起始索引输入框
+  - 记录数量输入框  
+  - "Browse by Index" 按钮
+
+#### 🔎 Key Search 标签页
+- **🎯 精确键搜索**：
+  - 键值输入框
+  - "Search Exact Key" 按钮
+
+- **🔤 前缀搜索**：
+  - 前缀输入框
+  - 最大结果数限制（1-1000）
+  - "Search by Prefix" 按钮
+
+- **🔍 模式搜索**：
+  - 模式输入框（子字符串匹配）
+  - 最大结果数限制
+  - "Search by Pattern" 按钮
+
+#### 📋 结果显示区域
+- **📄 JSON 格式结果**：结构化显示查询结果，包括：
+  - 键值信息（UTF-8 和十六进制格式）
+  - 值大小
+  - Protobuf 解析结果（如可用）
+
+### 📈 底部状态栏
+- **⚡ 实时状态更新**：显示操作结果、错误信息、成功提示等
+
+---
+
+## 📘 使用文档
+
+### 🚀 基本使用流程
+
+#### 1. 🎬 启动应用
+
 ```bash
-# Preview an LMDB database
+# 🏁 命令行启动
+lmdbug
+
+# 📂 或指定数据库路径
 lmdbug /path/to/your/database
 
-# With custom port
-lmdbug /path/to/your/database --port 8080
+# 🔌 带 Protobuf 支持
+lmdbug /path/to/database --protobuf-module user_pb2.py --message-class User
 ```
 
-### With Protobuf Support
-```bash
-# Load a compiled protobuf module
-lmdbug /path/to/your/database \
-  --protobuf-module /path/to/user_pb2.py \
-  --message-class User
+#### 2. ⚙️ 配置数据库
+1. 在 **"LMDB Database Path"** 输入框中输入数据库路径
+2. 点击 **"Load Database"** 按钮
+3. 检查状态栏确认加载成功 ✅
+
+#### 3. 🔌 配置 Protobuf（可选）
+1. 在 **"Protobuf Module Path"** 输入编译后的 `.pb2.py` 文件路径
+2. 在 **"Message Class Name"** 输入消息类名
+3. 重新点击 **"Load Database"** 加载 Protobuf 配置
+4. 在下拉框中选择主要消息类型
+
+---
+
+### 🔍 数据浏览操作
+
+#### 📖 Browse 功能
+- **📊 预览数据**：设置条目数量（默认10），点击 "Preview First Entries"
+- **📑 索引浏览**：设置起始索引和数量，点击 "Browse by Index"
+
+#### 🔎 Key Search 功能  
+- **🎯 精确搜索**：输入完整键名，点击 "Search Exact Key"
+- **🔤 前缀搜索**：输入键前缀，设置结果限制，点击 "Search by Prefix"
+- **🔍 模式搜索**：输入子字符串，设置结果限制，点击 "Search by Pattern"
+
+---
+
+### 📖 结果解读
+
+#### 📋 基本字段结构
+
+```json
+{
+  "key": "user:1001",                    // 🔑 UTF-8 解码的键（失败时显示十六进制）
+  "key_raw": "757365723a31303031",       // 🔢 原始十六进制键值
+  "value_size": 156,                     // 📏 值的字节大小
+  "value_info": {                        // 📦 值的详细信息
+    "raw_hex": "0a04...",                // 🔢 原始十六进制数据
+    "size": 156,                         // 📏 字节大小
+    "protobuf": {                        // 🔌 Protobuf 解析结果（如可用）
+      "success": true,                   // ✅ 解析成功标志
+      "json": "{...}",                   // 📄 JSON 格式
+      "dict": {...}                      // 📚 字典格式
+    },
+    "message_type_used": "User"          // 🏷️ 使用的消息类型
+  }
+}
 ```
 
-## Installation
+#### ⚠️ 错误处理
+- **🚫 数据库错误**：路径不存在、权限问题等
+- **🔌 Protobuf 错误**：模块不存在、类名错误、解析失败等
+- **🔍 搜索错误**：键不存在、输入为空等
 
-### Prerequisites
-- Python 3.9+
-- LMDB database files
-- (Optional) Compiled protobuf Python modules
+---
 
-### Install Dependencies
-```bash
-pip install lmdb protobuf gradio typer loguru
-```
+### 🚀 高级功能
 
-### Install from Source
-```bash
-git clone <repository-url>
-cd Lmdbug
-pip install -e .
-```
+#### 🔄 多消息类型支持
+- ✅ 加载包含多个消息类的 Protobuf 模块
+- 🔄 通过下拉框切换主要解析类型
+- 🎯 系统自动使用指定类型解析所有值
 
-## Command Line Interface
+#### 📊 数据格式兼容
+- **📝 UTF-8 键**：直接显示可读文本
+- **🔢 二进制键**：显示十六进制表示
+- **🔄 混合数据**：自动处理不同编码格式
 
-### Synopsis
-```
-lmdbug [OPTIONS] [DB_PATH]
-```
+---
 
-### Arguments
-- `DB_PATH`: Path to LMDB database directory (optional, can be set in web interface)
+### ⚡ 性能优化建议
 
-### Options
-- `-p, --protobuf-module TEXT`: Path to compiled protobuf module (.py file)
-- `-m, --message-class TEXT`: Protobuf message class name
-- `--port INTEGER`: Server port (default: 7860)
-- `--host TEXT`: Server host (default: 127.0.0.1)
-- `--log-level [DEBUG|INFO|WARNING|ERROR]`: Logging level (default: INFO)
-- `--version`: Show version and exit
-- `--help`: Show help message
+#### 🗄️ 大数据库浏览
+- ✅ 使用索引范围浏览而非全量预览
+- 🎯 限制搜索结果数量（建议 ≤ 100）
+- 🚀 优先使用前缀搜索而非模式搜索
 
-### Usage Examples
+#### 🔌 Protobuf 配置
+- ✅ 确保 `.pb2.py` 文件正确编译
+- 🎯 使用准确的消息类名
+- 🛠️ 处理解析失败时的降级显示
 
-#### Example 1: Basic Database Preview
-```bash
-lmdbug ./my_database
-```
-Opens the web interface at http://127.0.0.1:7860 for basic LMDB data browsing.
+---
 
-#### Example 2: Production Server with Protobuf
-```bash
-lmdbug /prod/user_data.lmdb \
-  --protobuf-module user_pb2.py \
-  --message-class User \
-  --host 0.0.0.0 \
-  --port 8080
-```
-Starts a production server accessible from any IP address.
+### 🔧 故障排查
 
-#### Example 3: Development with Debug Logging
-```bash
-lmdbug ./dev_database --log-level DEBUG
-```
-Enables detailed logging for development and debugging.
+#### ❓ 常见问题
 
-## Web Interface Features
+##### 1. 🚫 数据库加载失败
+- 🔍 检查路径是否正确
+- 🔐 确认数据库文件权限
+- ✅ 验证 LMDB 格式完整性
 
-### Database Configuration
-- **Database Path**: Set or change the LMDB database location
-- **Protobuf Module**: Load compiled protobuf modules for data deserialization
-- **Message Class**: Select the primary protobuf message type
+##### 2. ⚠️ Protobuf 解析失败
+- 📄 验证模块路径和类名
+- 🔍 检查数据是否为对应格式
+- 📊 查看状态栏错误信息
 
-### Data Browsing
-- **First N Entries**: Preview the first entries in the database
-- **Index Range**: Browse data by index with pagination
-- **Key Search**: Find specific entries by exact key match
-- **Prefix Search**: Find entries with keys starting with a prefix
-- **Pattern Search**: Find entries with keys containing a pattern
+##### 3. 🔍 搜索无结果
+- ✅ 确认键值存在
+- 🔤 检查编码格式（UTF-8 vs 二进制）
+- 🔢 尝试使用十六进制格式搜索
 
-### Data Display
-- **Key Information**: Shows both UTF-8 decoded and hex representations
-- **Value Preview**: Displays text preview and hex dump
-- **Protobuf Deserialization**: Automatically attempts to deserialize binary data as protobuf messages
-- **JSON View**: Pretty-printed JSON representation of protobuf data
+---
 
-## Protobuf Integration
+## 🎉 总结
 
-### Preparing Protobuf Modules
+这个 Web UI 设计简洁直观，支持快速数据库浏览和调试，特别适合开发和运维场景下的 LMDB 数据分析需求。通过友好的界面和强大的功能，让 LMDB 数据库的管理和调试变得轻松高效！
 
-1. **Compile your .proto files**:
-```bash
-protoc --python_out=. your_schema.proto
-```
+---
 
-2. **Ensure the generated Python file is accessible**:
-```bash
-ls your_schema_pb2.py
-```
-
-3. **Use with Lmdbug**:
-```bash
-lmdbug /path/to/database \
-  --protobuf-module your_schema_pb2.py \
-  --message-class YourMessage
-```
-
-### Example: Using the Sample Schema
-
-The project includes a sample protobuf schema in `examples/sample_proto.proto`:
-
-```bash
-# Compile the sample proto
-protoc --python_out=examples examples/sample_proto.proto
-
-# Use with Lmdbug
-lmdbug ./sample_database \
-  --protobuf-module examples/sample_proto_pb2.py \
-  --message-class User
-```
-
-## Database Operations
-
-### Supported Search Types
-1. **Exact Key Match**: Find a specific entry by its exact key
-2. **Prefix Search**: Find all keys starting with a given prefix
-3. **Pattern Search**: Find keys containing a substring
-4. **Index Range**: Browse entries by their position in the database
-
-### Data Format Support
-- **Text Keys**: UTF-8 encoded strings
-- **Binary Keys**: Hex representation with ASCII preview
-- **Binary Values**: Automatic format detection
-- **Protobuf Values**: Deserialization with multiple message type attempts
-
-## Configuration
-
-### Environment Variables
-No environment variables are required. All configuration is done via command line arguments or the web interface.
-
-### Runtime Configuration
-- Database path can be changed in the web interface
-- Protobuf modules can be loaded dynamically
-- Message types can be switched on-the-fly
-
-## Troubleshooting
-
-### Common Issues
-
-#### Database Not Found
-```
-Error: Database path does not exist: /path/to/database
-```
-**Solution**: Verify the database path exists and is a directory containing LMDB files.
-
-#### Protobuf Module Loading Failed
-```
-Error: Failed to load protobuf modules: No module named 'user_pb2'
-```
-**Solutions**:
-- Ensure the .py file path is correct
-- Check that the protobuf module was compiled successfully
-- Verify the message class name matches the proto definition
-
-#### Port Already in Use
-```
-Error: Address already in use
-```
-**Solution**: Use a different port with `--port` option or stop the service using the port.
-
-### Debug Mode
-Enable debug logging for detailed information:
-```bash
-lmdbug /path/to/database --log-level DEBUG
-```
-
-### Performance Considerations
-- Large databases: Use index range browsing instead of loading all entries
-- Memory usage: Protobuf deserialization consumes memory proportional to data size
-- Network access: Use `--host 0.0.0.0` only in trusted environments
-
-## Integration Examples
-
-### CI/CD Pipeline Usage
-```bash
-#!/bin/bash
-# Automated database validation script
-lmdbug /build/output/database \
-  --protobuf-module build_pb2.py \
-  --message-class BuildResult \
-  --port 9999 &
-
-# Run your tests against the preview server
-curl http://localhost:9999/api/health
-# ... additional validation logic
-```
-
-### Development Workflow
-```bash
-# Terminal 1: Start development server
-lmdbug ./dev_database --log-level DEBUG
-
-# Terminal 2: Make changes to your data
-python populate_database.py
-
-# Browse to http://localhost:7860 to see changes
-```
-
-## API Reference
-
-The web interface exposes the following core functionality programmatically:
-
-### Database Information
-- Get database statistics (entry count, page size, etc.)
-- List available protobuf message types
-
-### Data Access
-- Retrieve entries by index range
-- Search by key patterns
-- Get formatted entry data with protobuf deserialization
-
-### Configuration
-- Set database path
-- Load protobuf modules
-- Switch message types
-
-## Architecture Overview
-
-Lmdbug follows a clean architecture with separate concerns:
-
-- **Core Layer**: LMDB reading, protobuf handling, data formatting
-- **Service Layer**: Preview service orchestrating core components  
-- **UI Layer**: Gradio web interface
-- **CLI Layer**: Typer-based command line interface
-
-This separation ensures the tool can be extended or integrated into other systems easily.
-
-## Version History
-
-### Current Version Features
-- Direct CLI parameter configuration (no config files needed)
-- Modern Python 3.9+ type system
-- Simplified dependencies (5 packages)
-- Ruff-compliant code formatting
-- Loguru-based logging
-- Typer-based CLI
-
-### Breaking Changes from Previous Versions
-- YAML configuration files no longer supported
-- Click CLI replaced with Typer
-- `--create-config` option removed
-- Simplified parameter structure
-
-## Contributing
-
-When contributing to Lmdbug:
-
-1. Follow ruff formatting standards
-2. Use modern Python type hints (union types with `|`)
-3. Write clear, concise documentation
-4. Test with multiple LMDB databases and protobuf schemas
-5. Ensure compatibility with Python 3.9+
-
-## License
-
-[Include license information here]
+> 💡 **提示**：如遇到问题，请查看状态栏的实时反馈信息，或参考故障排查部分。祝您使用愉快！ 🚀
