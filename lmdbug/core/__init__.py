@@ -6,16 +6,17 @@ and handling protobuf data serialization/deserialization.
 """
 
 from .lmdb_reader import LMDBReader
-from .protobuf_handler import ProtobufHandler
-from .preview_service import PreviewService
+from .data_service import DataService
 from .exceptions import LmdbugError, DatabaseError, ProtobufError, DataProcessingError
+from .config import LmdbugConfig, config
 
 __all__ = [
     "LMDBReader",
-    "ProtobufHandler",
-    "PreviewService",
+    "DataService",
     "LmdbugError",
     "DatabaseError",
     "ProtobufError",
     "DataProcessingError",
+    "LmdbugConfig",
+    "config",
 ]

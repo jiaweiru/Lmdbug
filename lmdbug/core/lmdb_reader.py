@@ -1,3 +1,4 @@
+import re
 import lmdb
 from pathlib import Path
 from itertools import islice
@@ -9,9 +10,7 @@ logger = get_logger(__name__)
 
 
 class LMDBReader:
-    """
-    LMDB database reader with support for key-based queries and data preview.
-    """
+    """Simple LMDB database reader for data preview and key search."""
 
     def __init__(self, db_path: str, map_size: int = 10 * 1024 * 1024 * 1024):
         """Initialize LMDB reader.
@@ -29,11 +28,11 @@ class LMDBReader:
         """Validate that the LMDB database path exists."""
         if not self.db_path.exists():
             error_msg = f"LMDB database path not found: {self.db_path}"
-            logger.error(error_msg)
+            logger.warning(error_msg)  # Changed from error to warning - validation issue
             raise DatabaseError(error_msg)
         if not self.db_path.is_dir():
             error_msg = f"LMDB path must be a directory, got: {self.db_path}"
-            logger.error(error_msg)
+            logger.warning(error_msg)  # Changed from error to warning - validation issue
             raise DatabaseError(error_msg)
 
     def open(self):
@@ -75,88 +74,50 @@ class LMDBReader:
             logger.error(f"Exception in LMDB context: {exc_type.__name__}: {exc_val}")
         return False
 
-    def get_stats(self) -> dict[str, int]:
-        """Get database statistics."""
+    def get_basic_info(self) -> dict:
+        """Get basic database information."""
         self._ensure_open()
-
         with self.env.begin() as txn:
             stats = txn.stat()
+            info = self.env.info()
             return {
                 "entries": stats["entries"],
-                "page_size": stats["psize"],
-                "depth": stats["depth"],
-                "branch_pages": stats["branch_pages"],
-                "leaf_pages": stats["leaf_pages"],
-                "overflow_pages": stats["overflow_pages"],
+                "map_size": info["map_size"],
             }
 
-    def get_env_info(self) -> dict[str, int]:
-        """Get LMDB environment information including mapsize."""
+    def search_keys(self, pattern: str, count: int = 10) -> list[tuple[bytes, bytes]]:
+        """Search keys matching regex pattern and return first count matches."""
         self._ensure_open()
 
-        info = self.env.info()
-        return {
-            "map_size": info["map_size"],
-            "last_pgno": info["last_pgno"],
-            "last_txnid": info["last_txnid"],
-            "max_readers": info["max_readers"],
-            "num_readers": info["num_readers"],
-        }
+        # Try to compile as regex pattern
+        try:
+            regex = re.compile(pattern, re.IGNORECASE)
+            use_regex = True
+        except re.error as e:
+            logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+            pattern_bytes = pattern.encode("utf-8")
+            use_regex = False
 
-    def get_by_key(self, key: bytes) -> bytes | None:
-        """Get value by exact key match."""
-        self._ensure_open()
-
-        with self.env.begin() as txn:
-            return txn.get(key)
-
-    def get_keys_with_prefix(self, prefix: bytes, limit: int = 100) -> list[bytes]:
-        """Get keys that start with the given prefix."""
-        self._ensure_open()
+        def matches_pattern(key: bytes) -> bool:
+            if use_regex:
+                return bool(regex.search(key.decode("utf-8", errors="ignore")))
+            else:
+                return pattern_bytes in key
 
         with self.env.begin() as txn:
             cursor = txn.cursor()
-            cursor.set_range(prefix)
+            cursor.first()
 
-            return list(
-                islice((key for key, _ in cursor if key.startswith(prefix)), limit)
+            # Use generator + islice for efficient matching
+            matching_entries = (
+                (key, value) for key, value in cursor if matches_pattern(key)
             )
+            return list(islice(matching_entries, count))
 
-    def get_first_n_entries(self, n: int = 10) -> list[tuple[bytes, bytes]]:
+    def get_first_entries(self, count: int = 10) -> list[tuple[bytes, bytes]]:
         """Get the first N entries from the database."""
         self._ensure_open()
-
         with self.env.begin() as txn:
             cursor = txn.cursor()
             cursor.first()
-            return list(islice(cursor, n))
-
-    def search_keys_by_index(
-        self, start_index: int, count: int = 10
-    ) -> list[tuple[bytes, bytes]]:
-        """Get entries by index range for pagination."""
-        self._ensure_open()
-
-        with self.env.begin() as txn:
-            cursor = txn.cursor()
-            cursor.first()
-
-            all_entries = islice(cursor, start_index + count)
-            return list(islice(all_entries, start_index, None))
-
-    def search_keys_by_pattern(self, pattern: str, limit: int = 100) -> list[bytes]:
-        """Search for keys containing a substring pattern."""
-        self._ensure_open()
-
-        pattern_bytes = pattern.encode("utf-8", errors="ignore")
-
-        def key_generator():
-            with self.env.begin() as txn:
-                cursor = txn.cursor()
-                cursor.first()
-
-                for key, _ in cursor:
-                    if pattern_bytes in key:
-                        yield key
-
-        return list(islice(key_generator(), limit))
+            return list(islice(cursor, count))

@@ -30,6 +30,12 @@ message User {
   
   // Whether user is active
   bool is_active = 8;
+  
+  // Voice message audio data (base64 encoded PCM)
+  string voice_audio = 9;
+  
+  // User description/bio text
+  string description = 10;
 }
 
 // User profile information

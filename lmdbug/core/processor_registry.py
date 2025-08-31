@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from .logging import get_logger
+from .exceptions import DataProcessingError
 
 logger = get_logger(__name__)
 
@@ -31,13 +32,12 @@ class BaseFieldProcessor(ABC):
         self.logger = get_logger(self.__class__.__name__)
 
     @abstractmethod
-    def process(self, field_name: str, value, config: dict) -> dict:
+    def process(self, field_name: str, value) -> dict:
         """Process a protobuf field value.
         
         Args:
             field_name: Name of the protobuf field
             value: Field value (can be str, bytes, int, etc.)
-            config: Processing configuration from JSON config
             
         Returns:
             Dict with processing results. Must include:
@@ -92,11 +92,11 @@ class ProcessorRegistry:
             Processor instance.
             
         Raises:
-            ValueError: If processor not found.
+            DataProcessingError: If processor not found.
         """
         if name not in self._processors:
             available = list(self._processors.keys())
-            raise ValueError(f"Processor '{name}' not found. Available: {available}")
+            raise DataProcessingError(f"Processor '{name}' not found. Available: {available}")
         
         return self._processors[name](config)
 
@@ -129,7 +129,7 @@ class ProcessorRegistry:
             processor_file_path,
         )
         if not spec or not spec.loader:
-            raise ImportError(f"Failed to create module spec for: {processor_file_path}")
+            raise DataProcessingError(f"Failed to create module spec for: {processor_file_path}")
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
