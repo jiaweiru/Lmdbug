@@ -16,11 +16,18 @@ logger = get_logger(__name__)
 class DataService:
     """Simplified service for LMDB data preview with optional protobuf support."""
 
-    def __init__(self, db_path: str, map_size: int = 10 * 1024 * 1024 * 1024, processor_paths: list[str] | None = None):
+    def __init__(
+        self,
+        db_path: str,
+        map_size: int = 10 * 1024 * 1024 * 1024,
+        processor_paths: list[str] | None = None,
+    ):
         self.lmdb_reader = LMDBReader(db_path, map_size)
         self.protobuf_message_class = None
         self.temp_files = []
-        self.processor_paths = processor_paths or ["config_examples/custom_processors.py"]
+        self.processor_paths = processor_paths or [
+            "config_examples/custom_processors.py"
+        ]
 
     def open(self):
         """Open the LMDB environment."""
@@ -91,7 +98,7 @@ class DataService:
         matches = self.lmdb_reader.search_keys(pattern, count)
         if not matches:
             logger.debug(f"No matches found for pattern: {pattern}")
-            return [{"error": f"No matches found for pattern: {pattern}"}]
+            return []
         logger.debug(f"Found {len(matches)} matches for pattern: {pattern}")
         return [self._format_entry(k, v) for k, v in matches]
 
@@ -123,7 +130,7 @@ class DataService:
     def _add_media_preview(self, result: dict, protobuf_dict: dict):
         """Add media previews using registered processors."""
         from .processor_registry import processor_registry
-        
+
         # Auto-load processors if none registered
         if not processor_registry.list_processors():
             self._auto_load_processors()
@@ -163,27 +170,22 @@ class DataService:
     def _process_field(self, field_name: str, value, processor_registry) -> dict | None:
         """Process a field using registered processors."""
 
-        # Only try registered processors if any exist
-        if processor_registry.list_processors():
-            for processor_name in processor_registry.list_processors():
-                try:
-                    processor_instance = processor_registry.create_processor(
-                        processor_name
-                    )
-                    result = processor_instance.process(field_name, value)
-                    if result:
-                        return result
-                except Exception as e:
-                    logger.debug(
-                        f"Processor {processor_name} failed for {field_name}: {e}"
-                    )
+        # Try to find a processor registered with the exact field name
+        if field_name in processor_registry.list_processors():
+            try:
+                processor_instance = processor_registry.create_processor(field_name)
+                result = processor_instance.process(field_name, value)
+                if result:
+                    return result
+            except Exception as e:
+                logger.debug(f"Processor {field_name} failed for {field_name}: {e}")
 
         return None
 
     def _auto_load_processors(self):
         """Auto-load processors from configured paths."""
         from .processor_registry import processor_registry
-        
+
         loaded_count = 0
         for processor_path in self.processor_paths:
             try:
@@ -192,13 +194,13 @@ class DataService:
                     # Use processor_registry's load_from_file method
                     count = processor_registry.load_from_file(str(processor_file))
                     loaded_count += count
-                    
+
                     logger.debug(f"Loaded {count} processors from {processor_path}")
                 else:
                     logger.debug(f"Processor file not found: {processor_path}")
             except Exception as e:
                 logger.warning(f"Failed to load processors from {processor_path}: {e}")
-        
+
         if loaded_count > 0:
             logger.info(f"Auto-loaded {loaded_count} processors")
         else:

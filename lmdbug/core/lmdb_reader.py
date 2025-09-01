@@ -28,11 +28,15 @@ class LMDBReader:
         """Validate that the LMDB database path exists."""
         if not self.db_path.exists():
             error_msg = f"LMDB database path not found: {self.db_path}"
-            logger.warning(error_msg)  # Changed from error to warning - validation issue
+            logger.warning(
+                error_msg
+            )  # Changed from error to warning - validation issue
             raise DatabaseError(error_msg)
         if not self.db_path.is_dir():
             error_msg = f"LMDB path must be a directory, got: {self.db_path}"
-            logger.warning(error_msg)  # Changed from error to warning - validation issue
+            logger.warning(
+                error_msg
+            )  # Changed from error to warning - validation issue
             raise DatabaseError(error_msg)
 
     def open(self):

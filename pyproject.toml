@@ -3,7 +3,7 @@ name = "lmdbug"
 version = "0.1.0"
 description = "LMDB Data Preview Tool with Protobuf Support"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
     "gradio>=5.44.0",
     "lmdb>=1.7.3",
@@ -14,3 +14,7 @@ dependencies = [
 
 [project.scripts]
 lmdbug = "lmdbug.main:cli"
+
+[tool.setuptools.packages.find]
+include = ["lmdbug*"]
+exclude = ["config_examples*"]

@@ -9,16 +9,12 @@ import base64
 from lmdbug.core.processor_registry import BaseFieldProcessor, register_processor
 
 
-@register_processor("text_description")
-class TextDescriptionProcessor(BaseFieldProcessor):
-    """Processes text description fields for text preview."""
+@register_processor(["bio", "content", "text", "message", "description"])
+class TextFieldProcessor(BaseFieldProcessor):
+    """Processes various text fields for text preview."""
     
     def process(self, field_name: str, value) -> dict:
-        """Process text description fields and create text preview."""
-        # Only process fields that contain text descriptions
-        if field_name.lower() not in ('description', 'bio', 'content', 'text', 'message'):
-            return {}
-        
+        """Process text fields and create text preview."""
         if not isinstance(value, str) or len(value) < 20:
             return {}
         
@@ -34,16 +30,12 @@ class TextDescriptionProcessor(BaseFieldProcessor):
         }
 
 
-@register_processor("pcm_24khz_16bit")
-class Pcm24khzProcessor(BaseFieldProcessor):
-    """Processes 24kHz 16-bit PCM audio data."""
+@register_processor(["pcm", "audio_data", "audio", "voice_audio"])
+class AudioDataProcessor(BaseFieldProcessor):
+    """Processes various audio fields as PCM data."""
     
     def process(self, field_name: str, value) -> dict:
-        """Process PCM audio field and save as WAV file."""
-        # Only process fields that look like audio
-        if not field_name.lower().endswith(('audio', 'pcm')):
-            return {}
-            
+        """Process audio field and save as WAV file."""
         try:
             # Handle different input formats
             if isinstance(value, str):
@@ -59,7 +51,7 @@ class Pcm24khzProcessor(BaseFieldProcessor):
             
             # Create temporary WAV file
             with tempfile.NamedTemporaryFile(
-                delete=False, suffix=f"_{field_name}.wav", prefix="lmdbug_pcm24_"
+                delete=False, suffix=f"_{field_name}.wav", prefix="lmdbug_audio_"
             ) as temp_file:
                 wav_path = temp_file.name
             
@@ -78,5 +70,7 @@ class Pcm24khzProcessor(BaseFieldProcessor):
             }
             
         except Exception as e:
-            self.logger.warning(f"Failed to process PCM audio {field_name}: {e}")  # Processing failure, not system error
+            self.logger.warning(f"Failed to process audio {field_name}: {e}")
             return {}
+
+

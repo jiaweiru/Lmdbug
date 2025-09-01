@@ -86,11 +86,7 @@ def main(
                 db_path=config.db_path, protobuf_config=config.protobuf_config_dict
             )
 
-        try:
-            interface.launch(server_name=config.ui_host, server_port=config.ui_port, share=False, quiet=False)
-        finally:
-            interface.cleanup_temp_files()
-            logger.info("Application shutdown")
+        interface.launch(server_name=config.ui_host, server_port=config.ui_port, share=False, quiet=False)
 
     except KeyboardInterrupt:
         typer.echo("\n👋 Lmdbug stopped by user")
