@@ -101,7 +101,7 @@ class LmdbugInterface:
                                 label="Module Path",
                                 placeholder="/path/to/your_pb2.py",
                                 value=self.initial_protobuf_config.get("module_path")
-                                if self.initial_protobuf_config
+                                if self.initial_protobuf_config is not None
                                 else None,
                                 scale=2,
                                 elem_classes=["config-input"],
@@ -110,7 +110,7 @@ class LmdbugInterface:
                                 label="Message Class",
                                 placeholder="MessageClass",
                                 value=self.initial_protobuf_config.get("message_class")
-                                if self.initial_protobuf_config
+                                if self.initial_protobuf_config is not None
                                 else None,
                                 scale=1,
                                 elem_classes=["config-input"],
@@ -197,6 +197,7 @@ class LmdbugInterface:
                                     label="Content",
                                     lines=8,
                                     interactive=False,
+                                    placeholder="Select an entry to preview text content.",
                                     elem_classes=["text-preview"],
                                 )
                         with gr.Column():
@@ -550,14 +551,39 @@ class LmdbugInterface:
 
     def _update_entry_preview(
         self, results: list[dict], selected_entry_key: str
-    ) -> tuple[list[str], list[str], str, str | None]:
+    ) -> tuple[gr.update, gr.update, str, str | None]:
         """Update preview when entry selection changes."""
         if not results or not selected_entry_key:
-            return [], [], "", None
+            return (
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
         entry = self._get_entry_by_key(results, selected_entry_key)
         if not entry:
-            return [], [], "", None
+            return (
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
+
+        # Check if protobuf is available
+        if not self.data_service:
+            has_protobuf = False
+        else:
+            db_info = self.data_service.get_database_info()
+            has_protobuf = db_info.get("has_protobuf", False)
+
+        if not has_protobuf:
+            return (
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
         text_fields = self._get_available_text_fields(entry)
         audio_fields = self._get_available_audio_fields(entry)
@@ -570,13 +596,36 @@ class LmdbugInterface:
             entry, audio_fields[0] if audio_fields else None
         )
 
-        return text_fields, audio_fields, text_preview, audio_preview
+        return (
+            gr.update(
+                choices=text_fields,
+                value=text_fields[0] if text_fields else None,
+                interactive=True,
+            ),
+            gr.update(
+                choices=audio_fields,
+                value=audio_fields[0] if audio_fields else None,
+                interactive=True,
+            ),
+            text_preview,
+            audio_preview,
+        )
 
     def _update_text_preview(
         self, results: list[dict], selected_entry_key: str, selected_field: str
     ) -> str:
         """Update text preview based on selected entry and field."""
         if not results or not selected_entry_key or not selected_field:
+            return ""
+
+        # Check if protobuf is available
+        if not self.data_service:
+            return ""
+
+        db_info = self.data_service.get_database_info()
+        has_protobuf = db_info.get("has_protobuf", False)
+
+        if not has_protobuf:
             return ""
 
         entry = self._get_entry_by_key(results, selected_entry_key)
@@ -590,6 +639,16 @@ class LmdbugInterface:
     ) -> str | None:
         """Update audio preview based on selected entry and field."""
         if not results or not selected_entry_key or not selected_field:
+            return None
+
+        # Check if protobuf is available
+        if not self.data_service:
+            return None
+
+        db_info = self.data_service.get_database_info()
+        has_protobuf = db_info.get("has_protobuf", False)
+
+        if not has_protobuf:
             return None
 
         entry = self._get_entry_by_key(results, selected_entry_key)
@@ -665,13 +724,20 @@ class LmdbugInterface:
 
     def _search_data_wrapper(
         self, query: str, limit: int
-    ) -> tuple[
-        str, list, str, list[tuple[str, str]], list[str], list[str], str, str | None
-    ]:
+    ) -> tuple[str, list, str, gr.update, gr.update, gr.update, str, str | None]:
         """Wrapper for search that returns both HTML and raw data."""
         if not self.data_service:
             empty_html = self._format_no_data_html("No database loaded")
-            return empty_html, [], "Error: No database loaded", [], [], [], "", None
+            return (
+                empty_html,
+                [],
+                "Error: No database loaded",
+                gr.update(choices=[], value=None),
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
         if not query.strip():
             empty_html = self._format_no_data_html("Search query is required")
@@ -679,9 +745,9 @@ class LmdbugInterface:
                 empty_html,
                 [],
                 "Error: Search query is required",
-                [],
-                [],
-                [],
+                gr.update(choices=[], value=None),
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
                 "",
                 None,
             )
@@ -690,13 +756,17 @@ class LmdbugInterface:
             results = self.data_service.search_keys(query, limit)
             entry_options = self._get_entry_options(results)
 
+            # Check if protobuf is available
+            db_info = self.data_service.get_database_info()
+            has_protobuf = db_info.get("has_protobuf", False)
+
             # Get field options and preview from first entry if available
             text_fields = []
             audio_fields = []
             text_preview = ""
             audio_preview = None
 
-            if results:
+            if results and has_protobuf:
                 first_entry = results[0]
                 text_fields = self._get_available_text_fields(first_entry)
                 audio_fields = self._get_available_audio_fields(first_entry)
@@ -711,30 +781,58 @@ class LmdbugInterface:
                 self._format_results_html(results),
                 results,  # Raw data for other components
                 f"Found {len(results)} matches",
-                entry_options,
-                text_fields,
-                audio_fields,
+                gr.update(choices=entry_options, value=None),
+                gr.update(
+                    choices=text_fields,
+                    value=text_fields[0] if text_fields else None,
+                    interactive=has_protobuf,
+                ),
+                gr.update(
+                    choices=audio_fields,
+                    value=audio_fields[0] if audio_fields else None,
+                    interactive=has_protobuf,
+                ),
                 text_preview,
                 audio_preview,
             )
         except Exception as e:
             logger.warning(f"Search failed: {e}")
             empty_html = self._format_no_data_html(f"Error: {str(e)}")
-            return empty_html, [], f"Error: {str(e)}", [], [], [], "", None
+            return (
+                empty_html,
+                [],
+                f"Error: {str(e)}",
+                gr.update(choices=[], value=None),
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
     def _browse_entries_wrapper(
         self, count: int
-    ) -> tuple[
-        str, list, str, list[tuple[str, str]], list[str], list[str], str, str | None
-    ]:
+    ) -> tuple[str, list, str, gr.update, gr.update, gr.update, str, str | None]:
         """Wrapper for browse that returns both HTML and raw data."""
         if not self.data_service:
             empty_html = self._format_no_data_html("No database loaded")
-            return empty_html, [], "Error: No database loaded", [], [], [], "", None
+            return (
+                empty_html,
+                [],
+                "Error: No database loaded",
+                gr.update(choices=[], value=None),
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
         try:
             results = self.data_service.get_first_entries(count)
             entry_options = self._get_entry_options(results)
+
+            # Check if protobuf is available
+            db_info = self.data_service.get_database_info()
+            has_protobuf = db_info.get("has_protobuf", False)
 
             # Get field options and preview from first entry if available
             text_fields = []
@@ -742,7 +840,7 @@ class LmdbugInterface:
             text_preview = ""
             audio_preview = None
 
-            if results:
+            if results and has_protobuf:
                 first_entry = results[0]
                 text_fields = self._get_available_text_fields(first_entry)
                 audio_fields = self._get_available_audio_fields(first_entry)
@@ -757,16 +855,33 @@ class LmdbugInterface:
                 self._format_results_html(results),
                 results,  # Raw data for other components
                 f"Showing first {len(results)} entries",
-                entry_options,
-                text_fields,
-                audio_fields,
+                gr.update(choices=entry_options, value=None),
+                gr.update(
+                    choices=text_fields,
+                    value=text_fields[0] if text_fields else None,
+                    interactive=has_protobuf,
+                ),
+                gr.update(
+                    choices=audio_fields,
+                    value=audio_fields[0] if audio_fields else None,
+                    interactive=has_protobuf,
+                ),
                 text_preview,
                 audio_preview,
             )
         except Exception as e:
             logger.warning(f"Browse failed: {e}")
             empty_html = self._format_no_data_html(f"Error: {str(e)}")
-            return empty_html, [], f"Error: {str(e)}", [], [], [], "", None
+            return (
+                empty_html,
+                [],
+                f"Error: {str(e)}",
+                gr.update(choices=[], value=None),
+                gr.update(choices=[], value=None, interactive=False),
+                gr.update(choices=[], value=None, interactive=False),
+                "",
+                None,
+            )
 
     def cleanup_temp_files(self):
         """Clean up temporary files."""
