@@ -9,6 +9,7 @@ dependencies = [
     "lmdb>=1.7.3",
     "loguru>=0.7.3",
     "protobuf>=6.32.0",
+    "soundfile>=0.13.1",
     "typer>=0.16.1",
 ]
 
