@@ -25,9 +25,8 @@ class LmdbugConfig:
     protobuf_message_class: str | None = None
 
     # Processor settings
-    processor_paths: list[str] = field(
-        default_factory=lambda: [str(Path(__file__).parent.parent.parent / "config_examples/custom_processors.py")]
-    )
+    processor_paths: list[str] = field(default_factory=list)
+
     auto_load_processors: bool = True
 
     # UI settings
@@ -82,7 +81,11 @@ class LmdbugConfig:
         """Update configuration from command line arguments."""
         for key, value in kwargs.items():
             if hasattr(self, key) and value is not None:
-                setattr(self, key, value)
+                # Special handling for processor_paths to replace default
+                if key == "processor_paths" and isinstance(value, list):
+                    setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
                 logger.debug(f"Updated config: {key}={value}")
 
 

@@ -19,6 +19,7 @@ class LmdbugInterface:
         self.data_service: DataService | None = None
         self.initial_db_path: str | None = None
         self.initial_protobuf_config: dict[str, str] | None = None
+        self.initial_processor_paths: list[str] | None = None
 
     def create_interface(self) -> gr.Blocks:
         # Create custom theme with better colors
@@ -115,6 +116,18 @@ class LmdbugInterface:
                                 scale=1,
                                 elem_classes=["config-input"],
                             )
+
+                    with gr.Group():
+                        gr.HTML(
+                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">⚙️ Processor Configuration (Optional)</div>'
+                        )
+                        processor_paths_input = gr.Textbox(
+                            label="Processor File Paths",
+                            placeholder="/path/to/custom_processors.py (one per line)",
+                            value="\n".join(self.initial_processor_paths) if self.initial_processor_paths else None,
+                            lines=3,
+                            elem_classes=["config-input"],
+                        )
 
                     load_btn = gr.Button(
                         "🚀 Load Database", variant="primary", size="lg"
@@ -244,7 +257,7 @@ class LmdbugInterface:
             # Event handlers
             load_btn.click(
                 self._load_database,
-                [db_path_input, protobuf_module_input, message_class_input],
+                [db_path_input, protobuf_module_input, message_class_input, processor_paths_input],
                 [db_info_display, status_display],
             )
 
@@ -281,15 +294,17 @@ class LmdbugInterface:
         return interface
 
     def set_initial_config(
-        self, db_path: str | None = None, protobuf_config: dict[str, str] | None = None
+        self, db_path: str | None = None, protobuf_config: dict[str, str] | None = None, processor_paths: list[str] | None = None
     ):
         if db_path:
             self.initial_db_path = db_path
         if protobuf_config:
             self.initial_protobuf_config = protobuf_config
+        if processor_paths:
+            self.initial_processor_paths = processor_paths
 
     def _load_database(
-        self, db_path: str, protobuf_module: str, message_class: str
+        self, db_path: str, protobuf_module: str, message_class: str, processor_paths: str
     ) -> tuple[dict, str]:
         if not db_path.strip():
             error_html = "<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path is required</div>"
@@ -304,12 +319,25 @@ class LmdbugInterface:
             if self.data_service:
                 self.data_service.close()
 
-            # Use configuration for processor paths if available
-            processor_paths = None
-            if self.config:
-                processor_paths = self.config.processor_paths
+            # Parse processor paths from text input
+            parsed_processor_paths = None
+            if processor_paths.strip():
+                parsed_processor_paths = [
+                    path.strip() for path in processor_paths.strip().split('\n')
+                    if path.strip()
+                ]
+                # Validate processor paths
+                for path in parsed_processor_paths:
+                    if not Path(path).exists():
+                        error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Processor file does not exist: {path}</div>"
+                        return {}, error_html
 
-            self.data_service = DataService(db_path, processor_paths=processor_paths)
+            # Use configuration for processor paths if available, otherwise use parsed paths
+            processor_paths_to_use = parsed_processor_paths
+            if not processor_paths_to_use and self.config:
+                processor_paths_to_use = self.config.processor_paths
+
+            self.data_service = DataService(db_path, processor_paths=processor_paths_to_use)
             self.data_service.open()
 
             # Load protobuf if provided

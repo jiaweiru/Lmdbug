@@ -23,6 +23,9 @@ def main(
     message_class: str = typer.Option(
         None, "--message-class", "-m", help="Protobuf message class name"
     ),
+    processor_paths: list[str] = typer.Option(
+        None, "--processor-path", help="Path to processor file (can be used multiple times)"
+    ),
     port: int = typer.Option(7860, "--port", help="Port to run the web interface on"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the web interface to"),
     log_level: str = typer.Option("INFO", "--log-level", help="Logging level"),
@@ -34,6 +37,7 @@ def main(
       lmdbug                                                    # Basic usage
       lmdbug -d /path/to/db                                     # With database
       lmdbug -d /path/to/db -p proto_pb2.py -m MessageClass     # With protobuf
+      lmdbug --processor-path /path/to/custom_processors.py     # With custom processors
     """
     if version:
         typer.echo("Lmdbug version 0.1.0")
@@ -44,6 +48,7 @@ def main(
         db_path=db_path,
         protobuf_module_path=protobuf_module,
         protobuf_message_class=message_class,
+        processor_paths=processor_paths,
         ui_host=host,
         ui_port=port,
         log_level=log_level,
@@ -73,6 +78,13 @@ def main(
 
             typer.echo(f"✓ Protobuf module: {config.protobuf_module_path} -> {config.protobuf_message_class}")
 
+        if config.processor_paths:
+            for i, processor_path in enumerate(config.processor_paths):
+                if not Path(processor_path).exists():
+                    typer.echo(f"⚠ Processor file {i+1} does not exist: {processor_path}")
+                else:
+                    typer.echo(f"✓ Processor file {i+1}: {processor_path}")
+
         typer.echo("🚀 Starting Lmdbug web interface...")
         typer.echo(f"   Host: {config.ui_host}")
         typer.echo(f"   Port: {config.ui_port}")
@@ -81,9 +93,11 @@ def main(
         interface = LmdbugInterface(config)
         logger.info("Lmdbug interface initialized")
 
-        if config.db_path or config.has_protobuf_config:
+        if config.db_path or config.has_protobuf_config or config.processor_paths:
             interface.set_initial_config(
-                db_path=config.db_path, protobuf_config=config.protobuf_config_dict
+                db_path=config.db_path, 
+                protobuf_config=config.protobuf_config_dict,
+                processor_paths=config.processor_paths
             )
 
         interface.launch(server_name=config.ui_host, server_port=config.ui_port, share=False, quiet=False)

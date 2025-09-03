@@ -25,9 +25,7 @@ class DataService:
         self.lmdb_reader = LMDBReader(db_path, map_size)
         self.protobuf_message_class = None
         self.temp_files = []
-        self.processor_paths = processor_paths or [
-            "config_examples/custom_processors.py"
-        ]
+        self.processor_paths = processor_paths
 
     def open(self):
         """Open the LMDB environment."""
