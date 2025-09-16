@@ -18,21 +18,28 @@ def main(
         None, "--db-path", "-d", help="Path to LMDB database directory"
     ),
     protobuf_module: str = typer.Option(
-        None, "--protobuf-module", "-p", help="Path to compiled protobuf module (.py file)"
+        None,
+        "--protobuf-module",
+        "-p",
+        help="Path to compiled protobuf module (.py file)",
     ),
     message_class: str = typer.Option(
         None, "--message-class", "-m", help="Protobuf message class name"
     ),
     processor_paths: list[str] = typer.Option(
-        None, "--processor-path", help="Path to processor file (can be used multiple times)"
+        None,
+        "--processor-path",
+        help="Path to processor file (can be used multiple times)",
     ),
     port: int = typer.Option(7860, "--port", help="Port to run the web interface on"),
-    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the web interface to"),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Host to bind the web interface to"
+    ),
     log_level: str = typer.Option("INFO", "--log-level", help="Logging level"),
     version: bool = typer.Option(False, "--version", help="Show version and exit"),
 ):
     """Simple LMDB data preview tool with optional Protobuf support.
-    
+
     Examples:
       lmdbug                                                    # Basic usage
       lmdbug -d /path/to/db                                     # With database
@@ -73,17 +80,23 @@ def main(
                 raise typer.Exit(1)
 
             if not Path(config.protobuf_module_path).exists():
-                typer.echo(f"✗ Protobuf module does not exist: {config.protobuf_module_path}")
+                typer.echo(
+                    f"✗ Protobuf module does not exist: {config.protobuf_module_path}"
+                )
                 raise typer.Exit(1)
 
-            typer.echo(f"✓ Protobuf module: {config.protobuf_module_path} -> {config.protobuf_message_class}")
+            typer.echo(
+                f"✓ Protobuf module: {config.protobuf_module_path} -> {config.protobuf_message_class}"
+            )
 
         if config.processor_paths:
             for i, processor_path in enumerate(config.processor_paths):
                 if not Path(processor_path).exists():
-                    typer.echo(f"⚠ Processor file {i+1} does not exist: {processor_path}")
+                    typer.echo(
+                        f"⚠ Processor file {i + 1} does not exist: {processor_path}"
+                    )
                 else:
-                    typer.echo(f"✓ Processor file {i+1}: {processor_path}")
+                    typer.echo(f"✓ Processor file {i + 1}: {processor_path}")
 
         typer.echo("🚀 Starting Lmdbug web interface...")
         typer.echo(f"   Host: {config.ui_host}")
@@ -95,12 +108,17 @@ def main(
 
         if config.db_path or config.has_protobuf_config or config.processor_paths:
             interface.set_initial_config(
-                db_path=config.db_path, 
+                db_path=config.db_path,
                 protobuf_config=config.protobuf_config_dict,
-                processor_paths=config.processor_paths
+                processor_paths=config.processor_paths,
             )
 
-        interface.launch(server_name=config.ui_host, server_port=config.ui_port, share=False, quiet=False)
+        interface.launch(
+            server_name=config.ui_host,
+            server_port=config.ui_port,
+            share=False,
+            quiet=False,
+        )
 
     except KeyboardInterrupt:
         typer.echo("\n👋 Lmdbug stopped by user")

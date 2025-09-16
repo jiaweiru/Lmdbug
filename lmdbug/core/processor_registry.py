@@ -75,7 +75,7 @@ class ProcessorRegistry:
             class PcmAudioProcessor(BaseFieldProcessor):
                 def process(self, field_name, value, config):
                     return {"type": "audio", "temp_path": "..."}
-                    
+
             @processor_registry.register_decorator(["text", "bio", "content"])
             class TextProcessor(BaseFieldProcessor):
                 def process(self, field_name, value, config):

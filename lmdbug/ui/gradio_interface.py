@@ -124,7 +124,9 @@ class LmdbugInterface:
                         processor_paths_input = gr.Textbox(
                             label="Processor File Paths",
                             placeholder="/path/to/custom_processors.py (one per line)",
-                            value="\n".join(self.initial_processor_paths) if self.initial_processor_paths else None,
+                            value="\n".join(self.initial_processor_paths)
+                            if self.initial_processor_paths
+                            else None,
                             lines=3,
                             elem_classes=["config-input"],
                         )
@@ -257,7 +259,12 @@ class LmdbugInterface:
             # Event handlers
             load_btn.click(
                 self._load_database,
-                [db_path_input, protobuf_module_input, message_class_input, processor_paths_input],
+                [
+                    db_path_input,
+                    protobuf_module_input,
+                    message_class_input,
+                    processor_paths_input,
+                ],
                 [db_info_display, status_display],
             )
 
@@ -294,7 +301,10 @@ class LmdbugInterface:
         return interface
 
     def set_initial_config(
-        self, db_path: str | None = None, protobuf_config: dict[str, str] | None = None, processor_paths: list[str] | None = None
+        self,
+        db_path: str | None = None,
+        protobuf_config: dict[str, str] | None = None,
+        processor_paths: list[str] | None = None,
     ):
         if db_path:
             self.initial_db_path = db_path
@@ -304,7 +314,11 @@ class LmdbugInterface:
             self.initial_processor_paths = processor_paths
 
     def _load_database(
-        self, db_path: str, protobuf_module: str, message_class: str, processor_paths: str
+        self,
+        db_path: str,
+        protobuf_module: str,
+        message_class: str,
+        processor_paths: str,
     ) -> tuple[dict, str]:
         if not db_path.strip():
             error_html = "<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path is required</div>"
@@ -323,7 +337,8 @@ class LmdbugInterface:
             parsed_processor_paths = None
             if processor_paths.strip():
                 parsed_processor_paths = [
-                    path.strip() for path in processor_paths.strip().split('\n')
+                    path.strip()
+                    for path in processor_paths.strip().split("\n")
                     if path.strip()
                 ]
                 # Validate processor paths
@@ -337,7 +352,9 @@ class LmdbugInterface:
             if not processor_paths_to_use and self.config:
                 processor_paths_to_use = self.config.processor_paths
 
-            self.data_service = DataService(db_path, processor_paths=processor_paths_to_use)
+            self.data_service = DataService(
+                db_path, processor_paths=processor_paths_to_use
+            )
             self.data_service.open()
 
             # Load protobuf if provided
