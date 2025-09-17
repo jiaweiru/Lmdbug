@@ -3,7 +3,9 @@ Simplified Gradio interface for LMDB data preview.
 """
 
 import gradio as gr
+from dataclasses import dataclass, field
 from pathlib import Path
+from weakref import WeakSet
 from ..core.data_service import DataService
 from ..core.logging import get_logger
 from ..core.config import LmdbugConfig
@@ -11,15 +13,27 @@ from ..core.config import LmdbugConfig
 logger = get_logger(__name__)
 
 
+@dataclass
+class InterfaceSession:
+    service: DataService | None = None
+    results: list[dict] = field(default_factory=list)
+
+
 class LmdbugInterface:
     """Simple Gradio-based web interface for LMDB data preview."""
 
     def __init__(self, config: LmdbugConfig | None = None):
         self.config = config
-        self.data_service: DataService | None = None
         self.initial_db_path: str | None = None
         self.initial_protobuf_config: dict[str, str] | None = None
         self.initial_processor_paths: list[str] | None = None
+        self._active_services: WeakSet = WeakSet()
+
+    def _ensure_session(self, session: InterfaceSession | None) -> InterfaceSession:
+        """Return a session object, creating one if needed."""
+        if session is None:
+            session = InterfaceSession()
+        return session
 
     def create_interface(self) -> gr.Blocks:
         # Create custom theme with better colors
@@ -228,13 +242,13 @@ class LmdbugInterface:
                                 )
                                 audio_preview = gr.Audio(label="Player")
 
-            # Store results data separately for component updates
-            results_data = gr.State([])
+            # Store session-specific data service and results
+            session_state = gr.State(None)
 
             # Entry selector change handler
             entry_selector.change(
                 self._update_entry_preview,
-                [results_data, entry_selector],
+                [session_state, entry_selector],
                 [
                     text_field_selector,
                     audio_field_selector,
@@ -246,13 +260,13 @@ class LmdbugInterface:
             # Field selector change handlers
             text_field_selector.change(
                 self._update_text_preview,
-                [results_data, entry_selector, text_field_selector],
+                [session_state, entry_selector, text_field_selector],
                 [text_preview],
             )
 
             audio_field_selector.change(
                 self._update_audio_preview,
-                [results_data, entry_selector, audio_field_selector],
+                [session_state, entry_selector, audio_field_selector],
                 [audio_preview],
             )
 
@@ -264,37 +278,38 @@ class LmdbugInterface:
                     protobuf_module_input,
                     message_class_input,
                     processor_paths_input,
+                    session_state,
                 ],
-                [db_info_display, status_display],
+                [db_info_display, status_display, session_state],
             )
 
             browse_btn.click(
                 self._browse_entries_wrapper,
-                [entry_count],
+                [entry_count, session_state],
                 [
                     results_display,
-                    results_data,
                     status_display,
                     entry_selector,
                     text_field_selector,
                     audio_field_selector,
                     text_preview,
                     audio_preview,
+                    session_state,
                 ],
             )
 
             search_btn.click(
                 self._search_data_wrapper,
-                [search_input, entry_count],
+                [search_input, entry_count, session_state],
                 [
                     results_display,
-                    results_data,
                     status_display,
                     entry_selector,
                     text_field_selector,
                     audio_field_selector,
                     text_preview,
                     audio_preview,
+                    session_state,
                 ],
             )
 
@@ -319,52 +334,58 @@ class LmdbugInterface:
         protobuf_module: str,
         message_class: str,
         processor_paths: str,
-    ) -> tuple[dict, str]:
-        if not db_path.strip():
-            error_html = "<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path is required</div>"
-            return {}, error_html
+        session: InterfaceSession | None,
+    ) -> tuple[dict, str, InterfaceSession]:
+        session_obj = self._ensure_session(session)
 
-        if not Path(db_path).exists():
-            error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path does not exist: {db_path}</div>"
-            return {}, error_html
+        db_path_value = db_path.strip()
+        if not db_path_value:
+            error_html = "<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path is required</div>"
+            return {}, error_html, session_obj
+
+        if not Path(db_path_value).exists():
+            error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path does not exist: {db_path_value}</div>"
+            return {}, error_html, session_obj
+
+        parsed_processor_paths = None
+        processor_paths_value = processor_paths or ""
+        new_service: DataService | None = None
 
         try:
-            # Close existing service
-            if self.data_service:
-                self.data_service.close()
-
-            # Parse processor paths from text input
-            parsed_processor_paths = None
-            if processor_paths.strip():
+            if processor_paths_value.strip():
                 parsed_processor_paths = [
                     path.strip()
-                    for path in processor_paths.strip().split("\n")
+                    for path in processor_paths_value.strip().split("\n")
                     if path.strip()
                 ]
-                # Validate processor paths
                 for path in parsed_processor_paths:
                     if not Path(path).exists():
                         error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Processor file does not exist: {path}</div>"
-                        return {}, error_html
+                        return {}, error_html, session_obj
 
-            # Use configuration for processor paths if available, otherwise use parsed paths
             processor_paths_to_use = parsed_processor_paths
             if not processor_paths_to_use and self.config:
                 processor_paths_to_use = self.config.processor_paths
 
-            self.data_service = DataService(
-                db_path, processor_paths=processor_paths_to_use
+            new_service = DataService(
+                db_path_value, processor_paths=processor_paths_to_use
             )
-            self.data_service.open()
+            new_service.open()
 
-            # Load protobuf if provided
-            if protobuf_module.strip() and message_class.strip():
-                if not Path(protobuf_module).exists():
-                    return {}, f"Error: Protobuf module not found: {protobuf_module}"
-                self.data_service.load_protobuf_module(protobuf_module, message_class)
+            protobuf_module_value = protobuf_module.strip()
+            message_class_value = message_class.strip()
 
-            db_info = self.data_service.get_database_info()
-            db_name = Path(db_path).name
+            if protobuf_module_value and message_class_value:
+                if not Path(protobuf_module_value).exists():
+                    raise FileNotFoundError(
+                        f"Protobuf module not found: {protobuf_module_value}"
+                    )
+                new_service.load_protobuf_module(
+                    protobuf_module_value, message_class_value
+                )
+
+            db_info = new_service.get_database_info()
+            db_name = Path(db_path_value).name
             entries_count = db_info.get("entries", "unknown")
 
             success_html = f"""
@@ -374,27 +395,54 @@ class LmdbugInterface:
                 <strong>Entries:</strong> {entries_count}
             """
 
-            if protobuf_module.strip():
-                success_html += f"<br><strong>Protobuf:</strong> {message_class}"
+            if protobuf_module_value:
+                success_html += f"<br><strong>Protobuf:</strong> {message_class_value}"
 
             success_html += "</div>"
+
+            if session_obj.service and session_obj.service is not new_service:
+                self._active_services.discard(session_obj.service)
+                session_obj.service.close()
+
+            session_obj.service = new_service
+            session_obj.results = []
+            self._active_services.add(new_service)
 
             logger.info(
                 f"Database successfully loaded: {db_name}, entries: {entries_count}"
             )
-            return db_info, success_html
+            return db_info, success_html, session_obj
 
         except Exception as e:
             logger.warning(
                 f"Failed to load database: {e}"
             )  # User input error, not system error
+            if new_service is not None:
+                try:
+                    new_service.close()
+                except Exception:
+                    logger.debug("Failed to close partially initialized service")
             error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: {str(e)}</div>"
-            return {}, error_html
+            return {}, error_html, session_obj
 
     def _search_data(
-        self, query: str, limit: int
-    ) -> tuple[str, str, list[tuple[str, str]], list[str], list[str], str, str | None]:
-        if not self.data_service:
+        self, query: str, limit: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        list[tuple[str, str]],
+        list[str],
+        list[str],
+        str,
+        str | None,
+        bool,
+        InterfaceSession,
+    ]:
+        session_obj = self._ensure_session(session)
+
+        service = session_obj.service
+        if not service:
+            session_obj.results = []
             return (
                 self._format_no_data_html("No database loaded"),
                 "Error: No database loaded",
@@ -403,9 +451,12 @@ class LmdbugInterface:
                 [],
                 "",
                 None,
+                False,
+                session_obj,
             )
 
         if not query.strip():
+            session_obj.results = []
             return (
                 self._format_no_data_html("Search query is required"),
                 "Error: Search query is required",
@@ -414,10 +465,12 @@ class LmdbugInterface:
                 [],
                 "",
                 None,
+                False,
+                session_obj,
             )
 
         try:
-            results = self.data_service.search_keys(query, limit)
+            results = service.search_keys(query, limit)
             entry_options = self._get_entry_options(results)
 
             # Get field options and preview from first entry if available
@@ -425,8 +478,9 @@ class LmdbugInterface:
             audio_fields = []
             text_preview = ""
             audio_preview = None
+            has_protobuf = service.get_database_info().get("has_protobuf", False)
 
-            if results:
+            if results and has_protobuf:
                 first_entry = results[0]
                 text_fields = self._get_available_text_fields(first_entry)
                 audio_fields = self._get_available_audio_fields(first_entry)
@@ -436,6 +490,8 @@ class LmdbugInterface:
                 audio_preview = self._extract_audio_preview(
                     first_entry, audio_fields[0] if audio_fields else None
                 )
+
+            session_obj.results = results
 
             return (
                 self._format_results_html(results),
@@ -445,9 +501,12 @@ class LmdbugInterface:
                 audio_fields,
                 text_preview,
                 audio_preview,
+                has_protobuf,
+                session_obj,
             )
         except Exception as e:
             logger.warning(f"Search failed: {e}")  # User input error, not system error
+            session_obj.results = []
             return (
                 self._format_no_data_html(f"Error: {str(e)}"),
                 f"Error: {str(e)}",
@@ -456,12 +515,28 @@ class LmdbugInterface:
                 [],
                 "",
                 None,
+                False,
+                session_obj,
             )
 
     def _browse_entries(
-        self, count: int
-    ) -> tuple[str, str, list[tuple[str, str]], list[str], list[str], str, str | None]:
-        if not self.data_service:
+        self, count: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        list[tuple[str, str]],
+        list[str],
+        list[str],
+        str,
+        str | None,
+        bool,
+        InterfaceSession,
+    ]:
+        session_obj = self._ensure_session(session)
+
+        service = session_obj.service
+        if not service:
+            session_obj.results = []
             return (
                 self._format_no_data_html("No database loaded"),
                 "Error: No database loaded",
@@ -470,10 +545,12 @@ class LmdbugInterface:
                 [],
                 "",
                 None,
+                False,
+                session_obj,
             )
 
         try:
-            results = self.data_service.get_first_entries(count)
+            results = service.get_first_entries(count)
             entry_options = self._get_entry_options(results)
 
             # Get field options and preview from first entry if available
@@ -481,8 +558,9 @@ class LmdbugInterface:
             audio_fields = []
             text_preview = ""
             audio_preview = None
+            has_protobuf = service.get_database_info().get("has_protobuf", False)
 
-            if results:
+            if results and has_protobuf:
                 first_entry = results[0]
                 text_fields = self._get_available_text_fields(first_entry)
                 audio_fields = self._get_available_audio_fields(first_entry)
@@ -493,6 +571,8 @@ class LmdbugInterface:
                     first_entry, audio_fields[0] if audio_fields else None
                 )
 
+            session_obj.results = results
+
             return (
                 self._format_results_html(results),
                 f"Showing first {len(results)} entries",
@@ -501,11 +581,14 @@ class LmdbugInterface:
                 audio_fields,
                 text_preview,
                 audio_preview,
+                has_protobuf,
+                session_obj,
             )
         except Exception as e:
             logger.warning(
                 f"Browse failed: {e}"
             )  # User operation error, not system error
+            session_obj.results = []
             return (
                 self._format_no_data_html(f"Error: {str(e)}"),
                 f"Error: {str(e)}",
@@ -514,6 +597,8 @@ class LmdbugInterface:
                 [],
                 "",
                 None,
+                False,
+                session_obj,
             )
 
     def _get_entry_options(self, results: list[dict]) -> list[tuple[str, str]]:
@@ -595,9 +680,12 @@ class LmdbugInterface:
         return None
 
     def _update_entry_preview(
-        self, results: list[dict], selected_entry_key: str
+        self, session: InterfaceSession | None, selected_entry_key: str
     ) -> tuple[gr.update, gr.update, str, str | None]:
         """Update preview when entry selection changes."""
+        session_obj = self._ensure_session(session)
+        results = session_obj.results
+
         if not results or not selected_entry_key:
             return (
                 gr.update(choices=[], value=None, interactive=False),
@@ -616,10 +704,11 @@ class LmdbugInterface:
             )
 
         # Check if protobuf is available
-        if not self.data_service:
+        service = session_obj.service
+        if not service:
             has_protobuf = False
         else:
-            db_info = self.data_service.get_database_info()
+            db_info = service.get_database_info()
             has_protobuf = db_info.get("has_protobuf", False)
 
         if not has_protobuf:
@@ -657,17 +746,24 @@ class LmdbugInterface:
         )
 
     def _update_text_preview(
-        self, results: list[dict], selected_entry_key: str, selected_field: str
+        self,
+        session: InterfaceSession | None,
+        selected_entry_key: str,
+        selected_field: str,
     ) -> str:
         """Update text preview based on selected entry and field."""
+        session_obj = self._ensure_session(session)
+        results = session_obj.results
+
         if not results or not selected_entry_key or not selected_field:
             return ""
 
         # Check if protobuf is available
-        if not self.data_service:
+        service = session_obj.service
+        if not service:
             return ""
 
-        db_info = self.data_service.get_database_info()
+        db_info = service.get_database_info()
         has_protobuf = db_info.get("has_protobuf", False)
 
         if not has_protobuf:
@@ -680,17 +776,24 @@ class LmdbugInterface:
         return self._extract_text_preview(entry, selected_field)
 
     def _update_audio_preview(
-        self, results: list[dict], selected_entry_key: str, selected_field: str
+        self,
+        session: InterfaceSession | None,
+        selected_entry_key: str,
+        selected_field: str,
     ) -> str | None:
         """Update audio preview based on selected entry and field."""
+        session_obj = self._ensure_session(session)
+        results = session_obj.results
+
         if not results or not selected_entry_key or not selected_field:
             return None
 
         # Check if protobuf is available
-        if not self.data_service:
+        service = session_obj.service
+        if not service:
             return None
 
-        db_info = self.data_service.get_database_info()
+        db_info = service.get_database_info()
         has_protobuf = db_info.get("has_protobuf", False)
 
         if not has_protobuf:
@@ -768,170 +871,120 @@ class LmdbugInterface:
         return html
 
     def _search_data_wrapper(
-        self, query: str, limit: int
-    ) -> tuple[str, list, str, gr.update, gr.update, gr.update, str, str | None]:
-        """Wrapper for search that returns both HTML and raw data."""
-        if not self.data_service:
-            empty_html = self._format_no_data_html("No database loaded")
-            return (
-                empty_html,
-                [],
-                "Error: No database loaded",
-                gr.update(choices=[], value=None),
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
-                "",
-                None,
+        self, query: str, limit: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        gr.update,
+        gr.update,
+        gr.update,
+        str,
+        str | None,
+        InterfaceSession,
+    ]:
+        """Wrapper for search that returns HTML + component updates."""
+
+        (
+            results_html,
+            status_message,
+            entry_options,
+            text_fields,
+            audio_fields,
+            text_preview,
+            audio_preview,
+            has_protobuf,
+            session_obj,
+        ) = self._search_data(query, limit, session)
+
+        entry_update = gr.update(choices=entry_options, value=None)
+        if has_protobuf:
+            text_update = gr.update(
+                choices=text_fields,
+                value=text_fields[0] if text_fields else None,
+                interactive=bool(text_fields),
             )
-
-        if not query.strip():
-            empty_html = self._format_no_data_html("Search query is required")
-            return (
-                empty_html,
-                [],
-                "Error: Search query is required",
-                gr.update(choices=[], value=None),
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
-                "",
-                None,
+            audio_update = gr.update(
+                choices=audio_fields,
+                value=audio_fields[0] if audio_fields else None,
+                interactive=bool(audio_fields),
             )
+        else:
+            text_update = gr.update(choices=[], value=None, interactive=False)
+            audio_update = gr.update(choices=[], value=None, interactive=False)
 
-        try:
-            results = self.data_service.search_keys(query, limit)
-            entry_options = self._get_entry_options(results)
-
-            # Check if protobuf is available
-            db_info = self.data_service.get_database_info()
-            has_protobuf = db_info.get("has_protobuf", False)
-
-            # Get field options and preview from first entry if available
-            text_fields = []
-            audio_fields = []
-            text_preview = ""
-            audio_preview = None
-
-            if results and has_protobuf:
-                first_entry = results[0]
-                text_fields = self._get_available_text_fields(first_entry)
-                audio_fields = self._get_available_audio_fields(first_entry)
-                text_preview = self._extract_text_preview(
-                    first_entry, text_fields[0] if text_fields else None
-                )
-                audio_preview = self._extract_audio_preview(
-                    first_entry, audio_fields[0] if audio_fields else None
-                )
-
-            return (
-                self._format_results_html(results),
-                results,  # Raw data for other components
-                f"Found {len(results)} matches",
-                gr.update(choices=entry_options, value=None),
-                gr.update(
-                    choices=text_fields,
-                    value=text_fields[0] if text_fields else None,
-                    interactive=has_protobuf,
-                ),
-                gr.update(
-                    choices=audio_fields,
-                    value=audio_fields[0] if audio_fields else None,
-                    interactive=has_protobuf,
-                ),
-                text_preview,
-                audio_preview,
-            )
-        except Exception as e:
-            logger.warning(f"Search failed: {e}")
-            empty_html = self._format_no_data_html(f"Error: {str(e)}")
-            return (
-                empty_html,
-                [],
-                f"Error: {str(e)}",
-                gr.update(choices=[], value=None),
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
-                "",
-                None,
-            )
+        return (
+            results_html,
+            status_message,
+            entry_update,
+            text_update,
+            audio_update,
+            text_preview,
+            audio_preview,
+            session_obj,
+        )
 
     def _browse_entries_wrapper(
-        self, count: int
-    ) -> tuple[str, list, str, gr.update, gr.update, gr.update, str, str | None]:
-        """Wrapper for browse that returns both HTML and raw data."""
-        if not self.data_service:
-            empty_html = self._format_no_data_html("No database loaded")
-            return (
-                empty_html,
-                [],
-                "Error: No database loaded",
-                gr.update(choices=[], value=None),
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
-                "",
-                None,
+        self, count: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        gr.update,
+        gr.update,
+        gr.update,
+        str,
+        str | None,
+        InterfaceSession,
+    ]:
+        """Wrapper for browse that returns HTML + component updates."""
+
+        (
+            results_html,
+            status_message,
+            entry_options,
+            text_fields,
+            audio_fields,
+            text_preview,
+            audio_preview,
+            has_protobuf,
+            session_obj,
+        ) = self._browse_entries(count, session)
+
+        entry_update = gr.update(choices=entry_options, value=None)
+        if has_protobuf:
+            text_update = gr.update(
+                choices=text_fields,
+                value=text_fields[0] if text_fields else None,
+                interactive=bool(text_fields),
             )
-
-        try:
-            results = self.data_service.get_first_entries(count)
-            entry_options = self._get_entry_options(results)
-
-            # Check if protobuf is available
-            db_info = self.data_service.get_database_info()
-            has_protobuf = db_info.get("has_protobuf", False)
-
-            # Get field options and preview from first entry if available
-            text_fields = []
-            audio_fields = []
-            text_preview = ""
-            audio_preview = None
-
-            if results and has_protobuf:
-                first_entry = results[0]
-                text_fields = self._get_available_text_fields(first_entry)
-                audio_fields = self._get_available_audio_fields(first_entry)
-                text_preview = self._extract_text_preview(
-                    first_entry, text_fields[0] if text_fields else None
-                )
-                audio_preview = self._extract_audio_preview(
-                    first_entry, audio_fields[0] if audio_fields else None
-                )
-
-            return (
-                self._format_results_html(results),
-                results,  # Raw data for other components
-                f"Showing first {len(results)} entries",
-                gr.update(choices=entry_options, value=None),
-                gr.update(
-                    choices=text_fields,
-                    value=text_fields[0] if text_fields else None,
-                    interactive=has_protobuf,
-                ),
-                gr.update(
-                    choices=audio_fields,
-                    value=audio_fields[0] if audio_fields else None,
-                    interactive=has_protobuf,
-                ),
-                text_preview,
-                audio_preview,
+            audio_update = gr.update(
+                choices=audio_fields,
+                value=audio_fields[0] if audio_fields else None,
+                interactive=bool(audio_fields),
             )
-        except Exception as e:
-            logger.warning(f"Browse failed: {e}")
-            empty_html = self._format_no_data_html(f"Error: {str(e)}")
-            return (
-                empty_html,
-                [],
-                f"Error: {str(e)}",
-                gr.update(choices=[], value=None),
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
-                "",
-                None,
-            )
+        else:
+            text_update = gr.update(choices=[], value=None, interactive=False)
+            audio_update = gr.update(choices=[], value=None, interactive=False)
+
+        return (
+            results_html,
+            status_message,
+            entry_update,
+            text_update,
+            audio_update,
+            text_preview,
+            audio_preview,
+            session_obj,
+        )
 
     def cleanup_temp_files(self):
         """Clean up temporary files."""
-        if self.data_service:
-            self.data_service.cleanup_temp_files()
+        for service in list(self._active_services):
+            try:
+                service.close()
+            except Exception:
+                logger.debug("Failed to close data service during cleanup")
+            finally:
+                self._active_services.discard(service)
 
     def launch(self, **kwargs):
         interface = self.create_interface()
