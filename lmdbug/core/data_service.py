@@ -10,7 +10,7 @@ from .lmdb_reader import LMDBReader
 from .logging import get_logger
 from .exceptions import ProtobufError, DataProcessingError
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class DataService:

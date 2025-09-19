@@ -71,13 +71,6 @@ def setup(
         )
 
 
-def get_logger(name: str | None = None):
-    """Get logger bound to a specific name.
-
-    Args:
-        name: Logger name (typically __name__)
-
-    Returns:
-        Logger instance bound to the name
-    """
-    return logger.bind(name=name) if name else logger
+def get_logger():
+    """Return the shared application logger."""
+    return logger

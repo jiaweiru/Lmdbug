@@ -10,7 +10,7 @@ from ..core.data_service import DataService
 from ..core.logging import get_logger
 from ..core.config import LmdbugConfig
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 @dataclass

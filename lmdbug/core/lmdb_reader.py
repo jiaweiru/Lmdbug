@@ -6,7 +6,7 @@ from itertools import islice
 from .logging import get_logger
 from .exceptions import DatabaseError
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class LMDBReader:

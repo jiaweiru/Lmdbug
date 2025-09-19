@@ -10,7 +10,7 @@ from .ui.gradio_interface import LmdbugInterface
 from .core.logging import setup as setup_logging, get_logger
 from .core.config import config
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def main(

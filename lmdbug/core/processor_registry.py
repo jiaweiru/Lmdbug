@@ -12,7 +12,7 @@ from pathlib import Path
 from .logging import get_logger
 from .exceptions import DataProcessingError
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class BaseFieldProcessor(ABC):
@@ -29,7 +29,7 @@ class BaseFieldProcessor(ABC):
             config: Configuration dictionary for the processor.
         """
         self.config = config or {}
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = get_logger()
 
     @abstractmethod
     def process(self, field_name: str, value) -> dict:
