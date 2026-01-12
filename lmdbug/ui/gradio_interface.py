@@ -53,34 +53,131 @@ class LmdbugInterface:
 
         # Custom CSS for better styling
         css = """
-        .config-input input {
-            border-radius: 8px !important;
-            border: 2px solid #e5e7eb !important;
-            transition: border-color 0.2s ease !important;
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+        :root {
+            --ink-900: #0f172a;
+            --ink-700: #334155;
+            --ink-500: #64748b;
+            --brand-600: #0ea5a4;
+            --brand-500: #14b8a6;
+            --brand-200: #99f6e4;
+            --accent-500: #f97316;
+            --card: #ffffff;
+            --card-2: #f8fafc;
+            --line: #e2e8f0;
         }
-        .config-input input:focus {
-            border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+
+        body, .gradio-container {
+            font-family: 'Space Grotesk', 'Segoe UI', Tahoma, sans-serif !important;
+            color: var(--ink-900);
         }
-        .search-input input {
-            border-radius: 8px !important;
-            border: 2px solid #e5e7eb !important;
-        }
-        .search-input input:focus {
-            border-color: #059669 !important;
-            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1) !important;
-        }
-        .entry-selector select {
-            border-radius: 8px !important;
-        }
-        .text-preview textarea {
-            border-radius: 8px !important;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
-            font-size: 14px !important;
-        }
+
         .gradio-container {
             max-width: 1400px !important;
             margin: 0 auto !important;
+            background:
+                radial-gradient(1200px 600px at 10% -10%, #e0f2fe 0%, transparent 60%),
+                radial-gradient(1000px 700px at 110% 0%, #fef3c7 0%, transparent 55%),
+                linear-gradient(180deg, #f8fafc 0%, #ffffff 60%);
+            border-radius: 24px;
+            padding: 24px;
+        }
+
+        .app-hero {
+            background: linear-gradient(135deg, #0ea5a4 0%, #22d3ee 60%, #f97316 120%);
+            border-radius: 18px;
+            padding: 22px 26px;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+        }
+
+        .app-hero h1 {
+            font-size: 2.4rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin: 0 0 6px 0;
+            color: #0b1220;
+        }
+
+        .app-hero p {
+            margin: 0;
+            color: rgba(15, 23, 42, 0.7);
+            font-size: 1.02rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ink-900);
+            margin-bottom: 10px;
+        }
+
+        .section-subtitle {
+            color: var(--ink-500);
+            font-size: 0.92rem;
+            margin-bottom: 8px;
+        }
+
+        .gr-group, .gr-box {
+            background: var(--card) !important;
+            border: 1px solid var(--line) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
+        }
+
+        .config-input input, .search-input input, .entry-selector select {
+            border-radius: 10px !important;
+            border: 1px solid #cbd5e1 !important;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+        }
+
+        .config-input input:focus, .search-input input:focus {
+            border-color: var(--brand-600) !important;
+            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18) !important;
+        }
+
+        .text-preview textarea {
+            border-radius: 10px !important;
+            font-family: 'JetBrains Mono', 'Consolas', monospace !important;
+            font-size: 13px !important;
+        }
+
+        .gr-button {
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.01em;
+            border: 1px solid transparent !important;
+        }
+
+        .gr-button.primary {
+            background: linear-gradient(135deg, #0ea5a4, #22d3ee) !important;
+            color: #041b1e !important;
+            box-shadow: 0 8px 18px rgba(14, 165, 164, 0.25) !important;
+        }
+
+        .gr-button.secondary {
+            background: #f1f5f9 !important;
+            color: var(--ink-700) !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        .results-card {
+            border-radius: 14px !important;
+            background: var(--card-2) !important;
+            border: 1px dashed #cbd5e1 !important;
+        }
+
+        @media (max-width: 900px) {
+            .gradio-container {
+                padding: 14px;
+                border-radius: 18px;
+            }
+            .app-hero {
+                padding: 18px 18px;
+            }
+            .app-hero h1 {
+                font-size: 2rem;
+            }
         }
         """
 
@@ -89,17 +186,15 @@ class LmdbugInterface:
         ) as interface:
             with gr.Row():
                 gr.HTML("""
-                <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; margin-bottom: 20px;">
-                    <h1 style="color: white; margin: 0; font-size: 2.5em; font-weight: 300;">🗃️ Lmdbug</h1>
-                    <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 1.1em;">LMDB Database Preview Tool with Protobuf Support</p>
+                <div class="app-hero">
+                    <h1>🗃️ Lmdbug</h1>
+                    <p>LMDB Database Preview Tool with Protobuf Support</p>
                 </div>
                 """)
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    gr.HTML(
-                        '<h2 style="color: #374151; margin-bottom: 16px; font-size: 1.5em;">⚙️ Configuration</h2>'
-                    )
+                    gr.HTML('<div class="section-title">⚙️ Configuration</div>')
                     db_path_input = gr.Textbox(
                         label="📁 LMDB Database Path",
                         placeholder="/path/to/lmdb/database",
@@ -109,7 +204,7 @@ class LmdbugInterface:
 
                     with gr.Group():
                         gr.HTML(
-                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">🧠 Protobuf Configuration (Optional)</div>'
+                            '<div class="section-subtitle">🧠 Protobuf Configuration (Optional)</div>'
                         )
                         with gr.Row():
                             protobuf_module_input = gr.Textbox(
@@ -133,7 +228,7 @@ class LmdbugInterface:
 
                     with gr.Group():
                         gr.HTML(
-                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">⚙️ Processor Configuration (Optional)</div>'
+                            '<div class="section-subtitle">⚙️ Processor Configuration (Optional)</div>'
                         )
                         processor_paths_input = gr.Textbox(
                             label="Processor File Paths",
@@ -151,20 +246,18 @@ class LmdbugInterface:
 
                     with gr.Group():
                         status_display = gr.HTML(
-                            value="<div style='padding: 12px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9; color: #0c4a6e;'>📊 Ready to load database</div>"
+                            value="<div style='padding: 12px; background: #ecfeff; border-radius: 10px; border-left: 4px solid #14b8a6; color: #0f172a;'>📊 Ready to load database</div>"
                         )
                         db_info_display = gr.JSON(
                             label="📈 Database Info", value={}, visible=False
                         )
 
                 with gr.Column(scale=2):
-                    gr.HTML(
-                        '<h2 style="color: #374151; margin-bottom: 16px; font-size: 1.5em;">📊 Data Preview</h2>'
-                    )
+                    gr.HTML('<div class="section-title">📊 Data Preview</div>')
 
                     with gr.Group():
                         gr.HTML(
-                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">🔍 Search Database</div>'
+                            '<div class="section-subtitle">🔍 Search Database</div>'
                         )
                         with gr.Row():
                             search_input = gr.Textbox(
@@ -179,7 +272,7 @@ class LmdbugInterface:
 
                     with gr.Group():
                         gr.HTML(
-                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">📚 Browse Database</div>'
+                            '<div class="section-subtitle">📚 Browse Database</div>'
                         )
                         with gr.Row():
                             entry_count = gr.Number(
@@ -192,16 +285,17 @@ class LmdbugInterface:
                             browse_btn = gr.Button(
                                 "📚 Browse First Entries", scale=2, variant="secondary"
                             )
+                            random_btn = gr.Button(
+                                "Browse Random Entries", scale=2, variant="secondary"
+                            )
 
                     results_display = gr.HTML(
                         label="Results",
-                        value="<div style='text-align: center; padding: 40px; color: #6b7280; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;'>No data loaded. Use 'Browse First Entries' or 'Search' to view database contents.</div>",
+                        value="<div class='results-card' style='text-align: center; padding: 40px; color: #64748b;'>No data loaded. Use 'Browse First Entries', 'Browse Random Entries', or 'Search' to view database contents.</div>",
                     )
 
                     with gr.Group():
-                        gr.HTML(
-                            '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">🔎 Entry Preview</div>'
-                        )
+                        gr.HTML('<div class="section-subtitle">🔎 Entry Preview</div>')
                         entry_selector = gr.Dropdown(
                             label="Select Entry to Preview",
                             choices=[],
@@ -214,7 +308,7 @@ class LmdbugInterface:
                         with gr.Column():
                             with gr.Group():
                                 gr.HTML(
-                                    '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">📝 Text Content</div>'
+                                    '<div class="section-subtitle">📝 Text Content</div>'
                                 )
                                 text_field_selector = gr.Dropdown(
                                     label="Text Field",
@@ -232,7 +326,7 @@ class LmdbugInterface:
                         with gr.Column():
                             with gr.Group():
                                 gr.HTML(
-                                    '<div style="color: #6b7280; font-size: 0.9em; margin-bottom: 8px;">🎵 Audio Content</div>'
+                                    '<div class="section-subtitle">🎵 Audio Content</div>'
                                 )
                                 audio_field_selector = gr.Dropdown(
                                     label="Audio Field",
@@ -285,6 +379,21 @@ class LmdbugInterface:
 
             browse_btn.click(
                 self._browse_entries_wrapper,
+                [entry_count, session_state],
+                [
+                    results_display,
+                    status_display,
+                    entry_selector,
+                    text_field_selector,
+                    audio_field_selector,
+                    text_preview,
+                    audio_preview,
+                    session_state,
+                ],
+            )
+
+            random_btn.click(
+                self._browse_random_entries_wrapper,
                 [entry_count, session_state],
                 [
                     results_display,
@@ -371,6 +480,9 @@ class LmdbugInterface:
                 db_path_value, processor_paths=processor_paths_to_use
             )
             new_service.open()
+
+            if processor_paths_to_use is not None:
+                new_service.reload_processors()
 
             protobuf_module_value = protobuf_module.strip()
             message_class_value = message_class.strip()
@@ -601,6 +713,88 @@ class LmdbugInterface:
                 session_obj,
             )
 
+    def _browse_random_entries(
+        self, count: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        list[tuple[str, str]],
+        list[str],
+        list[str],
+        str,
+        str | None,
+        bool,
+        InterfaceSession,
+    ]:
+        session_obj = self._ensure_session(session)
+
+        service = session_obj.service
+        if not service:
+            session_obj.results = []
+            return (
+                self._format_no_data_html("No database loaded"),
+                "Error: No database loaded",
+                [],
+                [],
+                [],
+                "",
+                None,
+                False,
+                session_obj,
+            )
+
+        try:
+            results = service.get_random_entries(count)
+            entry_options = self._get_entry_options(results)
+
+            # Get field options and preview from first entry if available
+            text_fields = []
+            audio_fields = []
+            text_preview = ""
+            audio_preview = None
+            has_protobuf = service.get_database_info().get("has_protobuf", False)
+
+            if results and has_protobuf:
+                first_entry = results[0]
+                text_fields = self._get_available_text_fields(first_entry)
+                audio_fields = self._get_available_audio_fields(first_entry)
+                text_preview = self._extract_text_preview(
+                    first_entry, text_fields[0] if text_fields else None
+                )
+                audio_preview = self._extract_audio_preview(
+                    first_entry, audio_fields[0] if audio_fields else None
+                )
+
+            session_obj.results = results
+
+            return (
+                self._format_results_html(results),
+                f"Showing {len(results)} random entries",
+                entry_options,
+                text_fields,
+                audio_fields,
+                text_preview,
+                audio_preview,
+                has_protobuf,
+                session_obj,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Random browse failed: {e}"
+            )  # User operation error, not system error
+            session_obj.results = []
+            return (
+                self._format_no_data_html(f"Error: {str(e)}"),
+                f"Error: {str(e)}",
+                [],
+                [],
+                [],
+                "",
+                None,
+                False,
+                session_obj,
+            )
+
     def _get_entry_options(self, results: list[dict]) -> list[tuple[str, str]]:
         """Get entry options for selector (display_name, key)."""
         options = []
@@ -620,7 +814,7 @@ class LmdbugInterface:
             for text_item in entry["media_preview"]["text"]:
                 field_name = text_item.get("field_name", "text")
                 field_names.add(field_name)
-        return sorted(list(field_names))
+        return sorted(list(field_names), key=lambda x: x != "text")
 
     def _extract_text_preview(self, entry: dict, selected_field: str = None) -> str:
         """Extract text content from single entry for preview."""
@@ -650,7 +844,7 @@ class LmdbugInterface:
             for audio_item in entry["media_preview"]["audio"]:
                 field_name = audio_item.get("field_name", "audio")
                 field_names.add(field_name)
-        return sorted(list(field_names))
+        return sorted(list(field_names), key=lambda x: x != "audio")
 
     def _extract_audio_preview(
         self, entry: dict, selected_field: str = None
@@ -948,6 +1142,59 @@ class LmdbugInterface:
             has_protobuf,
             session_obj,
         ) = self._browse_entries(count, session)
+
+        entry_update = gr.update(choices=entry_options, value=None)
+        if has_protobuf:
+            text_update = gr.update(
+                choices=text_fields,
+                value=text_fields[0] if text_fields else None,
+                interactive=bool(text_fields),
+            )
+            audio_update = gr.update(
+                choices=audio_fields,
+                value=audio_fields[0] if audio_fields else None,
+                interactive=bool(audio_fields),
+            )
+        else:
+            text_update = gr.update(choices=[], value=None, interactive=False)
+            audio_update = gr.update(choices=[], value=None, interactive=False)
+
+        return (
+            results_html,
+            status_message,
+            entry_update,
+            text_update,
+            audio_update,
+            text_preview,
+            audio_preview,
+            session_obj,
+        )
+
+    def _browse_random_entries_wrapper(
+        self, count: int, session: InterfaceSession | None
+    ) -> tuple[
+        str,
+        str,
+        gr.update,
+        gr.update,
+        gr.update,
+        str,
+        str | None,
+        InterfaceSession,
+    ]:
+        """Wrapper for random browse that returns HTML + component updates."""
+
+        (
+            results_html,
+            status_message,
+            entry_options,
+            text_fields,
+            audio_fields,
+            text_preview,
+            audio_preview,
+            has_protobuf,
+            session_obj,
+        ) = self._browse_random_entries(count, session)
 
         entry_update = gr.update(choices=entry_options, value=None)
         if has_protobuf:

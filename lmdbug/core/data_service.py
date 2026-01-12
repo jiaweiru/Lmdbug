@@ -90,6 +90,13 @@ class DataService:
         logger.debug(f"Retrieved {len(entries)} entries")
         return [self._format_entry(k, v) for k, v in entries]
 
+    def get_random_entries(self, count: int = 10) -> list[dict]:
+        """Get the random N entries from the database."""
+        logger.debug(f"Retrieving random {count} entries from database")
+        entries = self.lmdb_reader.get_random_entries_keyhash(count)
+        logger.debug(f"Retrieved {len(entries)} entries")
+        return [self._format_entry(k, v) for k, v in entries]
+
     def search_keys(self, pattern: str, count: int = 10) -> list[dict]:
         """Search keys matching regex pattern and return first count matches."""
         logger.debug(f"Searching for pattern '{pattern}', limit {count}")
@@ -180,9 +187,15 @@ class DataService:
 
         return None
 
-    def _auto_load_processors(self):
+    def _auto_load_processors(self, clear_existing: bool = False):
         """Auto-load processors from configured paths."""
         from .processor_registry import processor_registry
+
+        if clear_existing:
+            processor_registry.clear()
+
+        if not self.processor_paths:
+            return
 
         loaded_count = 0
         for processor_path in self.processor_paths:
@@ -203,6 +216,10 @@ class DataService:
             logger.info(f"Auto-loaded {loaded_count} processors")
         else:
             logger.debug("No processors auto-loaded")
+
+    def reload_processors(self):
+        """Reload processors from configured paths, replacing existing registry."""
+        self._auto_load_processors(clear_existing=True)
 
     def cleanup_temp_files(self):
         """Clean up temporary files."""

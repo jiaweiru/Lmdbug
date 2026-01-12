@@ -1,5 +1,6 @@
 import re
 import lmdb
+import hashlib
 from pathlib import Path
 from itertools import islice
 
@@ -125,3 +126,58 @@ class LMDBReader:
             cursor = txn.cursor()
             cursor.first()
             return list(islice(cursor, count))
+
+    def get_random_entries_keyhash(
+        self,
+        count: int = 10,
+        oversample_factor: float = 3.0,
+    ) -> list[tuple[bytes, bytes]]:
+        """
+        Fast approximate random sampling using Key-Hash.
+        May return fewer than `count` entries.
+        """
+
+        self._ensure_open()
+        results: list[tuple[bytes, bytes]] = []
+
+        with self.env.begin() as txn:
+            stats = txn.stat()
+            total = stats["entries"]
+
+            if total == 0:
+                logger.error(
+                    "LMDB database is empty: cannot sample random entries "
+                    "(count=%d, oversample_factor=%s)",
+                    count,
+                    oversample_factor,
+                )
+                return results
+
+            max_u64 = 1 << 64  # 8bit hash
+            oversample_factor = max(1.0, oversample_factor)
+            p = min(1.0, count * oversample_factor / total)
+            threshold = int(p * max_u64)
+
+            cursor = txn.cursor()
+            cursor.first()
+
+            for key, value in cursor:
+                h = int.from_bytes(
+                    hashlib.blake2b(key, digest_size=8).digest(),
+                    "big",
+                )
+                if h < threshold:
+                    results.append((key, value))
+                if len(results) >= count:
+                    return results
+
+        logger.warning(
+            "Key-hash sampling returned fewer entries than requested "
+            "(got=%d, expected=%d, total=%d, oversample_factor=%.2f)",
+            len(results),
+            count,
+            total,
+            oversample_factor,
+        )
+
+        return results

@@ -127,6 +127,11 @@ class ProcessorRegistry:
         """Get list of registered processors."""
         return list(self._processors.keys())
 
+    def clear(self) -> None:
+        """Clear all registered processors."""
+        self._processors.clear()
+        logger.debug("Cleared processor registry")
+
     def load_from_file(self, processor_file_path: str) -> int:
         """Load processors from a Python file.
 
