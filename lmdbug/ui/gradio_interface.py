@@ -374,7 +374,16 @@ class LmdbugInterface:
                     processor_paths_input,
                     session_state,
                 ],
-                [db_info_display, status_display, session_state],
+                [
+                    db_info_display,
+                    status_display,
+                    entry_selector,
+                    text_field_selector,
+                    audio_field_selector,
+                    text_preview,
+                    audio_preview,
+                    session_state,
+                ],
             )
 
             browse_btn.click(
@@ -444,17 +453,49 @@ class LmdbugInterface:
         message_class: str,
         processor_paths: str,
         session: InterfaceSession | None,
-    ) -> tuple[dict, str, InterfaceSession]:
+    ) -> tuple[
+        dict,
+        str,
+        gr.update,
+        gr.update,
+        gr.update,
+        str,
+        str | None,
+        InterfaceSession,
+    ]:
         session_obj = self._ensure_session(session)
+        clear_entry_update = self._safe_dropdown_update([], None, interactive=False)
+        clear_text_update = self._safe_dropdown_update([], None, interactive=False)
+        clear_audio_update = self._safe_dropdown_update([], None, interactive=False)
+        clear_text_preview = ""
+        clear_audio_preview = None
 
         db_path_value = db_path.strip()
         if not db_path_value:
             error_html = "<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path is required</div>"
-            return {}, error_html, session_obj
+            return (
+                {},
+                error_html,
+                clear_entry_update,
+                clear_text_update,
+                clear_audio_update,
+                clear_text_preview,
+                clear_audio_preview,
+                session_obj,
+            )
 
         if not Path(db_path_value).exists():
             error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Database path does not exist: {db_path_value}</div>"
-            return {}, error_html, session_obj
+            return (
+                {},
+                error_html,
+                clear_entry_update,
+                clear_text_update,
+                clear_audio_update,
+                clear_text_preview,
+                clear_audio_preview,
+                session_obj,
+            )
 
         parsed_processor_paths = None
         processor_paths_value = processor_paths or ""
@@ -470,7 +511,16 @@ class LmdbugInterface:
                 for path in parsed_processor_paths:
                     if not Path(path).exists():
                         error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: Processor file does not exist: {path}</div>"
-                        return {}, error_html, session_obj
+                        return (
+                            {},
+                            error_html,
+                            clear_entry_update,
+                            clear_text_update,
+                            clear_audio_update,
+                            clear_text_preview,
+                            clear_audio_preview,
+                            session_obj,
+                        )
 
             processor_paths_to_use = parsed_processor_paths
             if not processor_paths_to_use and self.config:
@@ -523,7 +573,16 @@ class LmdbugInterface:
             logger.info(
                 f"Database successfully loaded: {db_name}, entries: {entries_count}"
             )
-            return db_info, success_html, session_obj
+            return (
+                db_info,
+                success_html,
+                clear_entry_update,
+                clear_text_update,
+                clear_audio_update,
+                clear_text_preview,
+                clear_audio_preview,
+                session_obj,
+            )
 
         except Exception as e:
             logger.warning(
@@ -535,7 +594,16 @@ class LmdbugInterface:
                 except Exception:
                     logger.debug("Failed to close partially initialized service")
             error_html = f"<div style='padding: 12px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444; color: #dc2626;'>⚠️ Error: {str(e)}</div>"
-            return {}, error_html, session_obj
+            return (
+                {},
+                error_html,
+                clear_entry_update,
+                clear_text_update,
+                clear_audio_update,
+                clear_text_preview,
+                clear_audio_preview,
+                session_obj,
+            )
 
     def _search_data(
         self, query: str, limit: int, session: InterfaceSession | None
@@ -591,17 +659,6 @@ class LmdbugInterface:
             text_preview = ""
             audio_preview = None
             has_protobuf = service.get_database_info().get("has_protobuf", False)
-
-            if results and has_protobuf:
-                first_entry = results[0]
-                text_fields = self._get_available_text_fields(first_entry)
-                audio_fields = self._get_available_audio_fields(first_entry)
-                text_preview = self._extract_text_preview(
-                    first_entry, text_fields[0] if text_fields else None
-                )
-                audio_preview = self._extract_audio_preview(
-                    first_entry, audio_fields[0] if audio_fields else None
-                )
 
             session_obj.results = results
 
@@ -671,17 +728,6 @@ class LmdbugInterface:
             text_preview = ""
             audio_preview = None
             has_protobuf = service.get_database_info().get("has_protobuf", False)
-
-            if results and has_protobuf:
-                first_entry = results[0]
-                text_fields = self._get_available_text_fields(first_entry)
-                audio_fields = self._get_available_audio_fields(first_entry)
-                text_preview = self._extract_text_preview(
-                    first_entry, text_fields[0] if text_fields else None
-                )
-                audio_preview = self._extract_audio_preview(
-                    first_entry, audio_fields[0] if audio_fields else None
-                )
 
             session_obj.results = results
 
@@ -807,12 +853,35 @@ class LmdbugInterface:
             options.append((display_name, key))
         return options
 
+    def _safe_dropdown_update(
+        self,
+        choices: list,
+        value: str | None,
+        interactive: bool,
+    ) -> gr.update:
+        """Return a dropdown update with a value guaranteed to be in choices."""
+        normalized_choices = [choice for choice in choices if choice is not None]
+        allowed_values = set()
+        for choice in normalized_choices:
+            if isinstance(choice, tuple) and len(choice) == 2:
+                allowed_values.add(choice[1])
+            else:
+                allowed_values.add(choice)
+        safe_value = value if value is None or value in allowed_values else None
+        return gr.update(
+            choices=normalized_choices,
+            value=safe_value,
+            interactive=interactive and bool(normalized_choices),
+        )
+
     def _get_available_text_fields(self, entry: dict) -> list[str]:
         """Get all available text field names from single entry."""
         field_names = set()
         if "media_preview" in entry and "text" in entry["media_preview"]:
             for text_item in entry["media_preview"]["text"]:
                 field_name = text_item.get("field_name", "text")
+                if not field_name:
+                    field_name = "text"
                 field_names.add(field_name)
         return sorted(list(field_names), key=lambda x: x != "text")
 
@@ -843,6 +912,8 @@ class LmdbugInterface:
         if "media_preview" in entry and "audio" in entry["media_preview"]:
             for audio_item in entry["media_preview"]["audio"]:
                 field_name = audio_item.get("field_name", "audio")
+                if not field_name:
+                    field_name = "audio"
                 field_names.add(field_name)
         return sorted(list(field_names), key=lambda x: x != "audio")
 
@@ -882,8 +953,8 @@ class LmdbugInterface:
 
         if not results or not selected_entry_key:
             return (
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
                 "",
                 None,
             )
@@ -891,8 +962,8 @@ class LmdbugInterface:
         entry = self._get_entry_by_key(results, selected_entry_key)
         if not entry:
             return (
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
                 "",
                 None,
             )
@@ -907,8 +978,8 @@ class LmdbugInterface:
 
         if not has_protobuf:
             return (
-                gr.update(choices=[], value=None, interactive=False),
-                gr.update(choices=[], value=None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
+                self._safe_dropdown_update([], None, interactive=False),
                 "",
                 None,
             )
@@ -925,15 +996,11 @@ class LmdbugInterface:
         )
 
         return (
-            gr.update(
-                choices=text_fields,
-                value=text_fields[0] if text_fields else None,
-                interactive=True,
+            self._safe_dropdown_update(
+                text_fields, text_fields[0] if text_fields else None, interactive=True
             ),
-            gr.update(
-                choices=audio_fields,
-                value=audio_fields[0] if audio_fields else None,
-                interactive=True,
+            self._safe_dropdown_update(
+                audio_fields, audio_fields[0] if audio_fields else None, interactive=True
             ),
             text_preview,
             audio_preview,
@@ -1090,21 +1157,17 @@ class LmdbugInterface:
             session_obj,
         ) = self._search_data(query, limit, session)
 
-        entry_update = gr.update(choices=entry_options, value=None)
+        entry_update = self._safe_dropdown_update(entry_options, None, interactive=True)
         if has_protobuf:
-            text_update = gr.update(
-                choices=text_fields,
-                value=text_fields[0] if text_fields else None,
-                interactive=bool(text_fields),
+            text_update = self._safe_dropdown_update(
+                text_fields, text_fields[0] if text_fields else None, interactive=True
             )
-            audio_update = gr.update(
-                choices=audio_fields,
-                value=audio_fields[0] if audio_fields else None,
-                interactive=bool(audio_fields),
+            audio_update = self._safe_dropdown_update(
+                audio_fields, audio_fields[0] if audio_fields else None, interactive=True
             )
         else:
-            text_update = gr.update(choices=[], value=None, interactive=False)
-            audio_update = gr.update(choices=[], value=None, interactive=False)
+            text_update = self._safe_dropdown_update([], None, interactive=False)
+            audio_update = self._safe_dropdown_update([], None, interactive=False)
 
         return (
             results_html,
@@ -1143,21 +1206,17 @@ class LmdbugInterface:
             session_obj,
         ) = self._browse_entries(count, session)
 
-        entry_update = gr.update(choices=entry_options, value=None)
+        entry_update = self._safe_dropdown_update(entry_options, None, interactive=True)
         if has_protobuf:
-            text_update = gr.update(
-                choices=text_fields,
-                value=text_fields[0] if text_fields else None,
-                interactive=bool(text_fields),
+            text_update = self._safe_dropdown_update(
+                text_fields, text_fields[0] if text_fields else None, interactive=True
             )
-            audio_update = gr.update(
-                choices=audio_fields,
-                value=audio_fields[0] if audio_fields else None,
-                interactive=bool(audio_fields),
+            audio_update = self._safe_dropdown_update(
+                audio_fields, audio_fields[0] if audio_fields else None, interactive=True
             )
         else:
-            text_update = gr.update(choices=[], value=None, interactive=False)
-            audio_update = gr.update(choices=[], value=None, interactive=False)
+            text_update = self._safe_dropdown_update([], None, interactive=False)
+            audio_update = self._safe_dropdown_update([], None, interactive=False)
 
         return (
             results_html,
@@ -1196,21 +1255,17 @@ class LmdbugInterface:
             session_obj,
         ) = self._browse_random_entries(count, session)
 
-        entry_update = gr.update(choices=entry_options, value=None)
+        entry_update = self._safe_dropdown_update(entry_options, None, interactive=True)
         if has_protobuf:
-            text_update = gr.update(
-                choices=text_fields,
-                value=text_fields[0] if text_fields else None,
-                interactive=bool(text_fields),
+            text_update = self._safe_dropdown_update(
+                text_fields, text_fields[0] if text_fields else None, interactive=True
             )
-            audio_update = gr.update(
-                choices=audio_fields,
-                value=audio_fields[0] if audio_fields else None,
-                interactive=bool(audio_fields),
+            audio_update = self._safe_dropdown_update(
+                audio_fields, audio_fields[0] if audio_fields else None, interactive=True
             )
         else:
-            text_update = gr.update(choices=[], value=None, interactive=False)
-            audio_update = gr.update(choices=[], value=None, interactive=False)
+            text_update = self._safe_dropdown_update([], None, interactive=False)
+            audio_update = self._safe_dropdown_update([], None, interactive=False)
 
         return (
             results_html,
